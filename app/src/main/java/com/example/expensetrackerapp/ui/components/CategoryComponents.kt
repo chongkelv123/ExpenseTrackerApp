@@ -17,6 +17,8 @@ import com.example.expensetrackerapp.data.model.ExpenseCategory
 import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
 import java.util.*
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 
 // Category colors
 val categoryNtuc = Color(0xFF2196F3) // Blue

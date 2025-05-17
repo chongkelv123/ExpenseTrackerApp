@@ -46,6 +46,8 @@ import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 
 @Composable
 fun HomeScreen(
