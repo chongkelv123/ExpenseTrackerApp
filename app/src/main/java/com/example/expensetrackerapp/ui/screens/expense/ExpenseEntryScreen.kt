@@ -1,6 +1,8 @@
 // 9. Create ExpenseEntryScreen.kt in com.example.expensetrackerapp.ui.screens.expense package
 package com.example.expensetrackerapp.ui.screens.expense
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -15,10 +17,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.getCategoryColor
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+//import java.time.LocalDate
+import org.threeten.bp.LocalDate
+//import java.time.format.DateTimeFormatter
+import org.threeten.bp.format.DateTimeFormatter
 import androidx.compose.material.icons.filled.CalendarToday
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseEntryScreen(

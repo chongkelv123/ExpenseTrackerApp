@@ -1,5 +1,7 @@
 package com.example.expensetrackerapp.ui.screens.home
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,15 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,7 +27,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.expensetrackerapp.data.model.Expense
@@ -42,13 +36,12 @@ import com.example.expensetrackerapp.ui.components.MonthYearSelector
 import com.example.expensetrackerapp.ui.components.MonthlySummaryCard
 import com.example.expensetrackerapp.ui.components.formatCurrency
 import com.example.expensetrackerapp.ui.components.getCategoryColor
-import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
-import java.text.NumberFormat
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
+import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel import java.text.NumberFormat
+import org.threeten.bp.format.DateTimeFormatter
 
+
+
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
     viewModel: ExpenseViewModel,
@@ -128,6 +121,7 @@ fun HomeScreen(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun TransactionItem(expense: Expense) {
     val categoryColor = getCategoryColor(expense.category)

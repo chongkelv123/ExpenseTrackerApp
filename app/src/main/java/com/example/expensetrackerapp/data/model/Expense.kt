@@ -1,6 +1,7 @@
 package com.example.expensetrackerapp.data.model
 
-import java.time.LocalDate
+import org.threeten.bp.LocalDate
+
 
 data class Expense(
     val id: Long = 0,
