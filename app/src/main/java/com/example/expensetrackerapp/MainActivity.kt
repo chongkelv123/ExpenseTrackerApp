@@ -1,4 +1,3 @@
-// 10. Update MainActivity.kt
 package com.example.expensetrackerapp
 
 import android.os.Bundle
@@ -10,20 +9,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModelProvider
+import com.example.expensetrackerapp.navigation.ExpenseTrackerNavigation
 import com.example.expensetrackerapp.ui.theme.ExpenseTrackerAppTheme
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 
 class MainActivity : ComponentActivity() {
-    private val expenseViewModel: ExpenseViewModel by viewModels {
-        val app = application as ExpenseTrackerApplication
-        ExpenseViewModel.Factory(
-            app.expenseRepository,
-            app.budgetRepository
-        )
-    }
+    // Initialize the ViewModel using the standard Android ViewModel pattern
+    private lateinit var expenseViewModel: ExpenseViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize ViewModel
+        val repository = (application as ExpenseTrackerApplication).repository
+        expenseViewModel = ViewModelProvider(this,
+            ExpenseViewModel.Factory(repository))[ExpenseViewModel::class.java]
 
         // Enable edge-to-edge design
         enableEdgeToEdge()

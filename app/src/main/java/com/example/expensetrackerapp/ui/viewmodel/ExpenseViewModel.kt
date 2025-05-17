@@ -1,4 +1,3 @@
-// 7. Create ExpenseViewModel.kt in com.example.expensetrackerapp.ui.viewmodel package
 package com.example.expensetrackerapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -10,9 +9,7 @@ import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.data.model.MonthYear
 import com.example.expensetrackerapp.data.model.MonthlySummary
-import com.example.expensetrackerapp.data.repository.BudgetRepository
-import com.example.expensetrackerapp.data.repository.ExpenseRepository
-import kotlinx.coroutines.flow.Flow
+import com.example.expensetrackerapp.data.repository.InMemoryExpenseRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,8 +19,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 class ExpenseViewModel(
-    private val expenseRepository: ExpenseRepository,
-    private val budgetRepository: BudgetRepository
+    private val repository: InMemoryExpenseRepository
 ) : ViewModel() {
 
     // Current selected month
@@ -32,7 +28,7 @@ class ExpenseViewModel(
 
     // Get expenses for the current month
     val monthlyExpenses: StateFlow<List<Expense>> =
-        combine(currentMonth, expenseRepository.getAllExpenses()) { month, allExpenses ->
+        combine(currentMonth, repository.expenses) { month, allExpenses ->
             allExpenses.filter {
                 val expenseMonth = MonthYear.fromLocalDate(it.date)
                 expenseMonth.month == month.month && expenseMonth.year == month.year
@@ -45,10 +41,15 @@ class ExpenseViewModel(
 
     // Get budgets for the current month
     val monthlyBudgets: StateFlow<List<Budget>> =
-        combine(currentMonth, budgetRepository.getBudgetsByMonth(_currentMonth.value)) { month, budgets ->
+        combine(currentMonth, repository.budgets) { month, budgets ->
             // If any category doesn't have a budget, create a default one
-            val existingCategories = budgets.map { it.category }
-            val allBudgets = budgets.toMutableList()
+            val existingCategories = budgets
+                .filter { it.monthYear == month.toFormattedString() }
+                .map { it.category }
+
+            val allBudgets = budgets
+                .filter { it.monthYear == month.toFormattedString() }
+                .toMutableList()
 
             ExpenseCategory.values().forEach { category ->
                 if (category !in existingCategories) {
@@ -137,19 +138,19 @@ class ExpenseViewModel(
                 description = description,
                 date = date
             )
-            expenseRepository.insertExpense(expense)
+            repository.insertExpense(expense)
         }
     }
 
     fun updateExpense(expense: Expense) {
         viewModelScope.launch {
-            expenseRepository.updateExpense(expense)
+            repository.updateExpense(expense)
         }
     }
 
     fun deleteExpense(expense: Expense) {
         viewModelScope.launch {
-            expenseRepository.deleteExpense(expense)
+            repository.deleteExpense(expense)
         }
     }
 
@@ -161,20 +162,20 @@ class ExpenseViewModel(
                 amount = amount,
                 monthYear = _currentMonth.value.toFormattedString()
             )
-            budgetRepository.insertBudget(budget)
+            repository.insertBudget(budget)
         }
     }
 
-    class Factory(
-        private val expenseRepository: ExpenseRepository,
-        private val budgetRepository: BudgetRepository
-    ) : ViewModelProvider.Factory {
+    /**
+     * Factory class for creating ExpenseViewModel instances
+     */
+    class Factory(private val repository: InMemoryExpenseRepository) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(ExpenseViewModel::class.java)) {
                 @Suppress("UNCHECKED_CAST")
-                return ExpenseViewModel(expenseRepository, budgetRepository) as T
+                return ExpenseViewModel(repository) as T
             }
-            throw IllegalArgumentException("Unknown ViewModel class")
+            throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }
 }
