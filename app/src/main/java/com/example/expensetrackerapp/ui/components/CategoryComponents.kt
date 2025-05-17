@@ -19,6 +19,9 @@ import java.time.format.DateTimeFormatter
 import java.util.*
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import com.example.expensetrackerapp.data.model.MonthYear
 
 // Category colors
 val categoryNtuc = Color(0xFF2196F3) // Blue

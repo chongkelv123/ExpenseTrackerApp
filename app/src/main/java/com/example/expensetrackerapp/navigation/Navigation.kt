@@ -97,6 +97,7 @@ fun ExpenseTrackerNavigation(viewModel: ExpenseViewModel) {
                     category = category,
                     onAddExpense = { cat, amount, desc, date ->
                         viewModel.addExpense(cat, amount, desc, date)
+                        navController.popBackStack()
                     },
                     onNavigateBack = { navController.popBackStack() }
                 )

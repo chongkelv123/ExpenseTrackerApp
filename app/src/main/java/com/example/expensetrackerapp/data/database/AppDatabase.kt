@@ -11,9 +11,10 @@ import com.example.expensetrackerapp.data.dao.BudgetDao
 import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.Budget
 import com.example.expensetrackerapp.util.DateConverter
+import com.example.expensetrackerapp.util.CategoryTypeConverter;
 
 @Database(entities = [Expense::class, Budget::class], version = 1, exportSchema = false)
-@TypeConverters(DateConverter::class)
+@TypeConverters(DateConverter::class, CategoryTypeConverter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun budgetDao(): BudgetDao
