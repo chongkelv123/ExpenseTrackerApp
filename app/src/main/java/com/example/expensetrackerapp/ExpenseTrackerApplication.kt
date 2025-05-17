@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/expensetrackerapp/ExpenseTrackerApplication.kt
 package com.example.expensetrackerapp
 
 import android.app.Application
@@ -7,7 +6,7 @@ import com.jakewharton.threetenabp.AndroidThreeTen
 
 class ExpenseTrackerApplication : Application() {
     // In-memory repository
-    val repository by lazy { InMemoryExpenseRepository() }
+    val repository = InMemoryExpenseRepository()
 
     override fun onCreate() {
         super.onCreate()

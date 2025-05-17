@@ -17,6 +17,7 @@ import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.getCategoryColor
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import androidx.compose.material.icons.filled.CalendarToday
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

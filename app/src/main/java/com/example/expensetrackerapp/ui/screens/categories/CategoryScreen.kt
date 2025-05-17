@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.getCategoryColor
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryScreen(
     onNavigateToCategory: (ExpenseCategory) -> Unit
@@ -47,6 +48,7 @@ fun CategoryScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryItem(
     category: ExpenseCategory,

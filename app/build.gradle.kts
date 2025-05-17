@@ -54,10 +54,13 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
 
+    // Material icons - important for resolving icon references
+    implementation("androidx.compose.material:material-icons-extended:1.5.4")
+
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.5")
 
-    // Date/Time handling - optional but useful
+    // Date/Time handling
     implementation("com.jakewharton.threetenabp:threetenabp:1.4.6")
 
     // Testing
