@@ -19,15 +19,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.screens.categories.CategoryScreen
 import com.example.expensetrackerapp.ui.screens.expense.ExpenseEntryScreen
 import com.example.expensetrackerapp.ui.screens.home.HomeScreen
 import com.example.expensetrackerapp.ui.screens.settings.SettingsScreen
+import com.example.expensetrackerapp.ui.screens.transaction.TransactionDetailScreen
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 
 // Define the main screens for bottom navigation
@@ -41,6 +44,10 @@ sealed class Screen(val route: String, val title: String) {
 sealed class DetailScreen(val route: String) {
     object ExpenseEntry : DetailScreen("expense_entry/{categoryId}") {
         fun createRoute(categoryId: String) = "expense_entry/$categoryId"
+    }
+
+    object TransactionDetail : DetailScreen("transaction_detail/{expenseId}") {
+        fun createRoute(expenseId: Long) = "transaction_detail/$expenseId"
     }
 }
 
@@ -66,6 +73,11 @@ fun ExpenseTrackerNavigation(viewModel: ExpenseViewModel) {
                     onNavigateToCategory = { category ->
                         navController.navigate(
                             DetailScreen.ExpenseEntry.createRoute(category.name)
+                        )
+                    },
+                    onNavigateToTransactionDetail = { expenseId ->
+                        navController.navigate(
+                            DetailScreen.TransactionDetail.createRoute(expenseId)
                         )
                     }
                 )
@@ -102,6 +114,21 @@ fun ExpenseTrackerNavigation(viewModel: ExpenseViewModel) {
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
+            composable(
+                route = DetailScreen.TransactionDetail.route,
+                arguments = listOf(
+                    navArgument("expenseId") { type = NavType.LongType }
+                )
+            ) { backStackEntry ->
+                val expenseId = backStackEntry.arguments?.getLong("expenseId") ?: 0L
+
+                TransactionDetailScreen(
+                    expenseId = expenseId,
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
@@ -118,6 +145,7 @@ private fun shouldShowBottomBar(navController: NavController): Boolean {
         currentRoute == Screen.Settings.route -> true
         // These routes do not
         currentRoute?.startsWith(DetailScreen.ExpenseEntry.route.split("/")[0]) == true -> false
+        currentRoute?.startsWith(DetailScreen.TransactionDetail.route.split("/")[0]) == true -> false
         else -> true
     }
 }

@@ -3,6 +3,7 @@ package com.example.expensetrackerapp.ui.screens.home
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,15 +19,26 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ElevatedCard
-
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.DismissDirection
+import androidx.compose.material3.DismissValue
+import androidx.compose.material3.SwipeToDismiss
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.rememberDismissState
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.expensetrackerapp.data.model.Expense
@@ -36,16 +48,18 @@ import com.example.expensetrackerapp.ui.components.MonthYearSelector
 import com.example.expensetrackerapp.ui.components.MonthlySummaryCard
 import com.example.expensetrackerapp.ui.components.formatCurrency
 import com.example.expensetrackerapp.ui.components.getCategoryColor
-import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel import java.text.NumberFormat
+import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
+import java.text.NumberFormat
+import kotlinx.coroutines.launch
 import org.threeten.bp.format.DateTimeFormatter
-
 
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
     viewModel: ExpenseViewModel,
-    onNavigateToCategory: (ExpenseCategory) -> Unit
+    onNavigateToCategory: (ExpenseCategory) -> Unit,
+    onNavigateToTransactionDetail: (Long) -> Unit
 ) {
     val currentMonth by viewModel.currentMonth.collectAsState()
     val monthlySummary by viewModel.monthlySummary.collectAsState()
@@ -109,8 +123,12 @@ fun HomeScreen(
 
             // Show recent transactions or a message if none exist
             if (monthlyExpenses.isNotEmpty()) {
-                items(monthlyExpenses.take(5)) { expense ->
-                    TransactionItem(expense = expense)
+                items(monthlyExpenses.take(10)) { expense ->
+                    SwipeableTransactionItem(
+                        expense = expense,
+                        onItemClick = { onNavigateToTransactionDetail(expense.id) },
+                        onDelete = { viewModel.deleteExpense(expense) }
+                    )
                 }
             } else {
                 item {
@@ -122,13 +140,74 @@ fun HomeScreen(
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionItem(expense: Expense) {
+fun SwipeableTransactionItem(
+    expense: Expense,
+    onItemClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val dismissState = rememberDismissState(
+        confirmValueChange = {
+            if (it == DismissValue.DismissedToStart) {
+                scope.launch {
+                    onDelete()
+                }
+                true
+            } else {
+                false
+            }
+        }
+    )
+
+    SwipeToDismiss(
+        state = dismissState,
+        directions = setOf(DismissDirection.EndToStart),
+        background = {
+            Card(
+                modifier = Modifier.fillMaxSize(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        dismissContent = {
+            TransactionItem(
+                expense = expense,
+                onClick = onItemClick
+            )
+        }
+    )
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+@Composable
+fun TransactionItem(
+    expense: Expense,
+    onClick: () -> Unit
+) {
     val categoryColor = getCategoryColor(expense.category)
     val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 1.dp
     ) {

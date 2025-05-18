@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-//import java.time.LocalDate
 import org.threeten.bp.LocalDate
 
 
@@ -28,13 +27,21 @@ class ExpenseViewModel(
     private val _currentMonth = MutableStateFlow(MonthYear.current())
     val currentMonth: StateFlow<MonthYear> = _currentMonth
 
+    // Expose all expenses to support viewing any transaction detail
+    val allExpenses: StateFlow<List<Expense>> = repository.expenses
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Get expenses for the current month
     val monthlyExpenses: StateFlow<List<Expense>> =
         combine(currentMonth, repository.expenses) { month, allExpenses ->
             allExpenses.filter {
                 val expenseMonth = MonthYear.fromLocalDate(it.date)
                 expenseMonth.month == month.month && expenseMonth.year == month.year
-            }
+            }.sortedByDescending { it.date } // Sort by date, most recent first
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -154,6 +161,11 @@ class ExpenseViewModel(
         viewModelScope.launch {
             repository.deleteExpense(expense)
         }
+    }
+
+    // Function to get single expense by ID
+    suspend fun getExpenseById(id: Long): Expense? {
+        return repository.getExpenseById(id)
     }
 
     // Budget operations
