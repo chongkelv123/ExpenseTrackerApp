@@ -362,6 +362,7 @@ fun TransactionDetailScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategorySelectionRow(
     selectedCategory: ExpenseCategory,
