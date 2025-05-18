@@ -1,12 +1,12 @@
 package com.example.expensetrackerapp
 
 import android.app.Application
-import com.example.expensetrackerapp.data.repository.InMemoryExpenseRepository
+import com.example.expensetrackerapp.data.db.SQLiteExpenseRepository
 import com.jakewharton.threetenabp.AndroidThreeTen
 
 class ExpenseTrackerApplication : Application() {
-    // In-memory repository
-    val repository = InMemoryExpenseRepository()
+    // SQLite repository
+    val repository by lazy { SQLiteExpenseRepository(this) }
 
     override fun onCreate() {
         super.onCreate()

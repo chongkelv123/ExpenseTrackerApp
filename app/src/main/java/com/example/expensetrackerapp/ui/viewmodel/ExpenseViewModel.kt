@@ -9,7 +9,7 @@ import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.data.model.MonthYear
 import com.example.expensetrackerapp.data.model.MonthlySummary
-import com.example.expensetrackerapp.data.repository.InMemoryExpenseRepository
+import com.example.expensetrackerapp.data.db.SQLiteExpenseRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +21,7 @@ import org.threeten.bp.LocalDate
 
 
 class ExpenseViewModel(
-    private val repository: InMemoryExpenseRepository
+    private val repository: SQLiteExpenseRepository
 ) : ViewModel() {
 
     // Current selected month
@@ -171,7 +171,7 @@ class ExpenseViewModel(
     /**
      * Factory class for creating ExpenseViewModel instances
      */
-    class Factory(private val repository: InMemoryExpenseRepository) : ViewModelProvider.Factory {
+    class Factory(private val repository: SQLiteExpenseRepository) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(ExpenseViewModel::class.java)) {
                 @Suppress("UNCHECKED_CAST")
