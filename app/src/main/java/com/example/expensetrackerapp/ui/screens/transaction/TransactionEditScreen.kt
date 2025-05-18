@@ -1,4 +1,4 @@
-package com.example.expensetrackerapp.ui.screens.expense
+package com.example.expensetrackerapp.ui.screens.transaction
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -14,8 +14,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.getCategoryColor
+import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 import org.threeten.bp.LocalDate
 import org.threeten.bp.format.DateTimeFormatter
 import org.threeten.bp.temporal.ChronoUnit
@@ -24,24 +26,39 @@ import java.util.concurrent.TimeUnit
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExpenseEntryScreen(
-    category: ExpenseCategory,
-    onAddExpense: (ExpenseCategory, Double, String, LocalDate) -> Unit,
+fun TransactionEditScreen(
+    expenseId: Long,
+    viewModel: ExpenseViewModel,
     onNavigateBack: () -> Unit
 ) {
-    var amountText by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    // Find the expense in the current monthly expenses
+    val monthlyExpenses by viewModel.monthlyExpenses.collectAsState()
+    val expense = remember(monthlyExpenses, expenseId) {
+        monthlyExpenses.find { it.id == expenseId }
+    }
 
-    // Show date picker dialog
+    // If expense is null, show error state
+    if (expense == null) {
+        TransactionNotFoundScreen(onNavigateBack)
+        return
+    }
+
+    // State for form fields
+    var category by remember { mutableStateOf(expense.category) }
+    var amountText by remember { mutableStateOf(expense.amount.toString()) }
+    var description by remember { mutableStateOf(expense.description) }
+    var selectedDate by remember { mutableStateOf(expense.date) }
+
+    // State for date picker dialog
     var showDatePicker by remember { mutableStateOf(false) }
 
+    // Format for displaying date
     val dateFormatter = DateTimeFormatter.ofPattern("dd MMMM yyyy")
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Add ${category.displayName} Expense") },
+                title = { Text(text = "Edit Transaction") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -60,11 +77,18 @@ fun ExpenseEntryScreen(
                 onClick = {
                     val amount = amountText.toDoubleOrNull() ?: 0.0
                     if (amount > 0) {
-                        onAddExpense(category, amount, description, selectedDate)
+                        val updatedExpense = expense.copy(
+                            category = category,
+                            amount = amount,
+                            description = description,
+                            date = selectedDate
+                        )
+                        viewModel.updateExpense(updatedExpense)
+                        onNavigateBack()
                     }
                 },
                 icon = { Icon(Icons.Default.Save, contentDescription = "Save") },
-                text = { Text("Save") },
+                text = { Text("Save Changes") },
                 containerColor = getCategoryColor(category)
             )
         }
@@ -76,6 +100,48 @@ fun ExpenseEntryScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Category selection
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Category",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ExpenseCategory.values().forEach { cat ->
+                            val categoryColor = getCategoryColor(cat)
+                            val isSelected = cat == category
+
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { category = cat },
+                                label = { Text(cat.displayName) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = categoryColor.copy(alpha = 0.2f),
+                                    selectedLabelColor = categoryColor
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Date selection
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -188,7 +254,7 @@ fun ExpenseEntryScreen(
         }
     }
 
-    // Date picker dialog using Material3 DatePicker
+    // Date picker dialog
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = TimeUnit.DAYS.toMillis(selectedDate.toEpochDay())
@@ -222,6 +288,28 @@ fun ExpenseEntryScreen(
                 },
                 title = { Text("Select Date") }
             )
+        }
+    }
+}
+
+@Composable
+fun TransactionNotFoundScreen(onNavigateBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Transaction not found",
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = onNavigateBack) {
+            Text("Go Back")
         }
     }
 }

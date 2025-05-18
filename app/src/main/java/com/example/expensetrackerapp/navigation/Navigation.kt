@@ -1,12 +1,14 @@
 package com.example.expensetrackerapp.navigation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -19,25 +21,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.screens.categories.CategoryScreen
 import com.example.expensetrackerapp.ui.screens.expense.ExpenseEntryScreen
 import com.example.expensetrackerapp.ui.screens.home.HomeScreen
+import com.example.expensetrackerapp.ui.screens.reports.CategoryReportScreen
 import com.example.expensetrackerapp.ui.screens.settings.SettingsScreen
 import com.example.expensetrackerapp.ui.screens.transaction.TransactionDetailScreen
+import com.example.expensetrackerapp.ui.screens.transaction.TransactionEditScreen
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 
 // Define the main screens for bottom navigation
 sealed class Screen(val route: String, val title: String) {
     object Home : Screen("home", "Home")
-    object Categories : Screen("categories", "Categories")
+    object Reports : Screen("reports", "Reports")
     object Settings : Screen("settings", "Settings")
+
+    // Keep Categories as a route but not in bottom navigation
+    object Categories : Screen("categories", "Categories")
 }
 
 // Define detailed screens that need parameters
@@ -46,11 +51,16 @@ sealed class DetailScreen(val route: String) {
         fun createRoute(categoryId: String) = "expense_entry/$categoryId"
     }
 
-    object TransactionDetail : DetailScreen("transaction_detail/{expenseId}") {
-        fun createRoute(expenseId: Long) = "transaction_detail/$expenseId"
+    object TransactionDetail : DetailScreen("transaction_detail/{transactionId}") {
+        fun createRoute(transactionId: Long) = "transaction_detail/$transactionId"
+    }
+
+    object TransactionEdit : DetailScreen("transaction_edit/{transactionId}") {
+        fun createRoute(transactionId: Long) = "transaction_edit/$transactionId"
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ExpenseTrackerNavigation(viewModel: ExpenseViewModel) {
     val navController = rememberNavController()
@@ -75,19 +85,31 @@ fun ExpenseTrackerNavigation(viewModel: ExpenseViewModel) {
                             DetailScreen.ExpenseEntry.createRoute(category.name)
                         )
                     },
-                    onNavigateToTransactionDetail = { expenseId ->
+                    onNavigateToTransactionDetail = { transactionId ->
                         navController.navigate(
-                            DetailScreen.TransactionDetail.createRoute(expenseId)
+                            DetailScreen.TransactionDetail.createRoute(transactionId)
                         )
                     }
                 )
             }
 
+            // Keep Categories screen in NavHost for when it's accessed from Home
             composable(Screen.Categories.route) {
                 CategoryScreen(
                     onNavigateToCategory = { category ->
                         navController.navigate(
                             DetailScreen.ExpenseEntry.createRoute(category.name)
+                        )
+                    }
+                )
+            }
+
+            composable(Screen.Reports.route) {
+                CategoryReportScreen(
+                    viewModel = viewModel,
+                    onNavigateToTransactionDetail = { transactionId ->
+                        navController.navigate(
+                            DetailScreen.TransactionDetail.createRoute(transactionId)
                         )
                     }
                 )
@@ -115,16 +137,26 @@ fun ExpenseTrackerNavigation(viewModel: ExpenseViewModel) {
                 )
             }
 
-            composable(
-                route = DetailScreen.TransactionDetail.route,
-                arguments = listOf(
-                    navArgument("expenseId") { type = NavType.LongType }
-                )
-            ) { backStackEntry ->
-                val expenseId = backStackEntry.arguments?.getLong("expenseId") ?: 0L
+            composable(DetailScreen.TransactionDetail.route) { backStackEntry ->
+                val transactionId = backStackEntry.arguments?.getString("transactionId")?.toLongOrNull() ?: 0
 
                 TransactionDetailScreen(
-                    expenseId = expenseId,
+                    expenseId = transactionId,
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToEdit = { expenseId ->
+                        navController.navigate(
+                            DetailScreen.TransactionEdit.createRoute(expenseId)
+                        )
+                    }
+                )
+            }
+
+            composable(DetailScreen.TransactionEdit.route) { backStackEntry ->
+                val transactionId = backStackEntry.arguments?.getString("transactionId")?.toLongOrNull() ?: 0
+
+                TransactionEditScreen(
+                    expenseId = transactionId,
                     viewModel = viewModel,
                     onNavigateBack = { navController.popBackStack() }
                 )
@@ -141,11 +173,13 @@ private fun shouldShowBottomBar(navController: NavController): Boolean {
     return when {
         // These routes show the bottom bar
         currentRoute == Screen.Home.route -> true
-        currentRoute == Screen.Categories.route -> true
+        currentRoute == Screen.Reports.route -> true
         currentRoute == Screen.Settings.route -> true
         // These routes do not
+        currentRoute == Screen.Categories.route -> false
         currentRoute?.startsWith(DetailScreen.ExpenseEntry.route.split("/")[0]) == true -> false
         currentRoute?.startsWith(DetailScreen.TransactionDetail.route.split("/")[0]) == true -> false
+        currentRoute?.startsWith(DetailScreen.TransactionEdit.route.split("/")[0]) == true -> false
         else -> true
     }
 }
@@ -160,10 +194,10 @@ fun ExpenseTrackerBottomNavigation(navController: NavController) {
             route = Screen.Home.route
         ),
         NavigationItem(
-            title = Screen.Categories.title,
-            selectedIcon = Icons.Filled.List,
-            unselectedIcon = Icons.Outlined.List,
-            route = Screen.Categories.route
+            title = Screen.Reports.title,
+            selectedIcon = Icons.Filled.PieChart,
+            unselectedIcon = Icons.Outlined.PieChart,
+            route = Screen.Reports.route
         ),
         NavigationItem(
             title = Screen.Settings.title,

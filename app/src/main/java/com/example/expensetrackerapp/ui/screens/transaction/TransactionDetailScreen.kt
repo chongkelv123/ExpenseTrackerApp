@@ -1,93 +1,48 @@
 package com.example.expensetrackerapp.ui.screens.transaction
 
-import android.os.Build
-import androidx.annotation.RequiresApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.expensetrackerapp.data.model.Expense
-import com.example.expensetrackerapp.data.model.ExpenseCategory
+import com.example.expensetrackerapp.ui.components.formatCurrency
 import com.example.expensetrackerapp.ui.components.getCategoryColor
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
-import org.threeten.bp.LocalDate
 import org.threeten.bp.format.DateTimeFormatter
 
-/**
- * Screen for viewing and editing transaction details.
- * This screen handles both updating existing transactions and viewing transaction details.
- */
-@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionDetailScreen(
     expenseId: Long,
     viewModel: ExpenseViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToEdit: (Long) -> Unit
 ) {
-    val allExpenses by viewModel.allExpenses.collectAsState()
-    val expense = remember(allExpenses, expenseId) {
-        allExpenses.find { it.id == expenseId }
+    // Find the expense in the current monthly expenses
+    val monthlyExpenses by viewModel.monthlyExpenses.collectAsState()
+    val expense = remember(monthlyExpenses, expenseId) {
+        monthlyExpenses.find { it.id == expenseId }
     }
 
-    // If expense not found, navigate back
-    if (expense == null) {
-        LaunchedEffect(Unit) {
-            onNavigateBack()
-        }
-        return
-    }
+    val dateFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
 
-    // State variables for editing
-    var isEditing by remember { mutableStateOf(false) }
-    var amountText by remember(expense) { mutableStateOf(expense.amount.toString()) }
-    var description by remember(expense) { mutableStateOf(expense.description) }
-    var selectedCategory by remember(expense) { mutableStateOf(expense.category) }
-    var selectedDate by remember(expense) { mutableStateOf(expense.date) }
+    // Show confirmation dialog before deleting
     var showDeleteDialog by remember { mutableStateOf(false) }
-
-    val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
-
-    // Show delete confirmation dialog
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Transaction?") },
-            text = { Text("Are you sure you want to delete this transaction? This action cannot be undone.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteExpense(expense)
-                        showDeleteDialog = false
-                        onNavigateBack()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = if (isEditing) "Edit Transaction" else "Transaction Details") },
+                title = { Text("Transaction Details") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -97,304 +52,190 @@ fun TransactionDetailScreen(
                     }
                 },
                 actions = {
-                    if (!isEditing) {
-                        // Edit button
-                        IconButton(onClick = { isEditing = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit"
-                            )
-                        }
-                        // Delete button
-                        IconButton(onClick = { showDeleteDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete"
-                            )
-                        }
+                    IconButton(onClick = { onNavigateToEdit(expenseId) }) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Transaction"
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = getCategoryColor(selectedCategory).copy(alpha = 0.1f)
-                )
+                    IconButton(onClick = { showDeleteDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Transaction"
+                        )
+                    }
+                }
             )
-        },
-        floatingActionButton = {
-            if (isEditing) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        val amount = amountText.toDoubleOrNull() ?: 0.0
-                        if (amount > 0) {
-                            val updatedExpense = expense.copy(
-                                category = selectedCategory,
-                                amount = amount,
-                                description = description,
-                                date = selectedDate
-                            )
-                            viewModel.updateExpense(updatedExpense)
-                            isEditing = false
-                        }
-                    },
-                    icon = { Icon(Icons.Default.Save, contentDescription = "Save") },
-                    text = { Text("Save") },
-                    containerColor = getCategoryColor(selectedCategory)
-                )
-            }
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Date selection
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Row(
+            expense?.let { exp ->
+                val categoryColor = getCategoryColor(exp.category)
+
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .padding(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = "Date",
-                        tint = getCategoryColor(selectedCategory)
-                    )
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    Text(
-                        text = "Date: ${selectedDate.format(dateFormatter)}",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    if (isEditing) {
-                        Button(
-                            onClick = { /* Show date picker dialog */ },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = getCategoryColor(selectedCategory)
-                            )
+                    // Amount section with category color
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = categoryColor.copy(alpha = 0.1f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Change")
+                            Text(
+                                text = exp.category.displayName,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = categoryColor,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = formatCurrency(exp.amount),
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Transaction details
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            // Description section
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(categoryColor, CircleShape)
+                                        .align(Alignment.CenterVertically)
+                                )
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Column {
+                                    Text(
+                                        text = "Description",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = exp.description.ifEmpty { "(No description)" },
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            }
+
+                            Divider(modifier = Modifier.padding(vertical = 12.dp))
+
+                            // Date section
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = null,
+                                    tint = categoryColor,
+                                    modifier = Modifier.size(24.dp)
+                                )
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Column {
+                                    Text(
+                                        text = "Date",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = exp.date.format(dateFormatter),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Category selection (only in edit mode)
-            if (isEditing) {
-                Text(
-                    text = "Category",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.align(Alignment.Start)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                CategorySelectionRow(
-                    selectedCategory = selectedCategory,
-                    onCategorySelected = { selectedCategory = it }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-            } else {
-                // Category display in view mode
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = getCategoryColor(selectedCategory).copy(alpha = 0.1f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Category,
-                            contentDescription = "Category",
-                            tint = getCategoryColor(selectedCategory)
-                        )
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Text(
-                            text = "Category: ${selectedCategory.displayName}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            // Amount input
-            if (isEditing) {
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { newValue ->
-                        // Only allow numeric input with decimal point
-                        if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
-                            amountText = newValue
+                if (showDeleteDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteDialog = false },
+                        title = { Text("Delete Transaction") },
+                        text = { Text("Are you sure you want to delete this transaction? This action cannot be undone.") },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    viewModel.deleteExpense(exp)
+                                    showDeleteDialog = false
+                                    onNavigateBack()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text("Delete")
+                            }
+                        },
+                        dismissButton = {
+                            OutlinedButton(onClick = { showDeleteDialog = false }) {
+                                Text("Cancel")
+                            }
                         }
-                    },
-                    label = { Text("Amount (S$)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-            } else {
-                // Amount display in view mode
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
+                }
+            } ?: run {
+                // Transaction not found
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AttachMoney,
-                            contentDescription = "Amount",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                    Text(
+                        text = "Transaction not found",
+                        style = MaterialTheme.typography.titleLarge
+                    )
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                        Text(
-                            text = "Amount: S$${expense.amount}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                    Button(onClick = onNavigateBack) {
+                        Text("Go Back")
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Description input
-            if (isEditing) {
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                // Description display in view mode
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Description,
-                            contentDescription = "Description",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Text(
-                            text = "Description: ${expense.description.ifEmpty { "(No description)" }}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-
-            if (!isEditing) {
-                Spacer(modifier = Modifier.height(32.dp))
-
-                Button(
-                    onClick = { isEditing = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit"
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Edit Transaction")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedButton(
-                    onClick = { showDeleteDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete"
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Delete Transaction")
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CategorySelectionRow(
-    selectedCategory: ExpenseCategory,
-    onCategorySelected: (ExpenseCategory) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        ExpenseCategory.values().forEach { category ->
-            val isSelected = category == selectedCategory
-            val backgroundColor = if (isSelected) {
-                getCategoryColor(category)
-            } else {
-                getCategoryColor(category).copy(alpha = 0.1f)
-            }
-
-            val textColor = if (isSelected) {
-                MaterialTheme.colorScheme.surface
-            } else {
-                getCategoryColor(category)
-            }
-
-            FilterChip(
-                selected = isSelected,
-                onClick = { onCategorySelected(category) },
-                label = { Text(category.displayName) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = backgroundColor,
-                    selectedLabelColor = textColor
-                )
-            )
         }
     }
 }
