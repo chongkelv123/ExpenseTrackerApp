@@ -28,10 +28,10 @@ fun TransactionDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Long) -> Unit
 ) {
-    // Find the expense in the current monthly expenses
-    val monthlyExpenses by viewModel.monthlyExpenses.collectAsState()
-    val expense = remember(monthlyExpenses, expenseId) {
-        monthlyExpenses.find { it.id == expenseId }
+    // Find the expense in all expenses (not just the current period)
+    val allExpenses by viewModel.allExpenses.collectAsState()
+    val expense = remember(allExpenses, expenseId) {
+        allExpenses.find { it.id == expenseId }
     }
 
     val dateFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
@@ -120,6 +120,36 @@ fun TransactionDetailScreen(
                         Column(
                             modifier = Modifier.padding(16.dp)
                         ) {
+                            // Period indicator - new addition to show if this transaction is in the current period
+                            val currentDateRange by viewModel.currentDateRange.collectAsState()
+                            val isInCurrentPeriod = exp.date.isEqual(currentDateRange.startDate) ||
+                                    (exp.date.isAfter(currentDateRange.startDate) &&
+                                            exp.date.isBefore(currentDateRange.endDate) ||
+                                            exp.date.isEqual(currentDateRange.endDate))
+
+                            if (isInCurrentPeriod) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                        shape = MaterialTheme.shapes.small
+                                    ) {
+                                        Text(
+                                            text = "Current Period",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                Divider(modifier = Modifier.padding(bottom = 12.dp))
+                            }
+
                             // Description section
                             Row(
                                 modifier = Modifier

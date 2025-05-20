@@ -20,9 +20,11 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.expensetrackerapp.data.model.DateRange
 import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
-import com.example.expensetrackerapp.ui.components.MonthYearSelector
+import com.example.expensetrackerapp.ui.components.DateRangeSelector
+import com.example.expensetrackerapp.ui.components.CustomDateRangeDialog
 import com.example.expensetrackerapp.ui.components.TransactionItem
 import com.example.expensetrackerapp.ui.components.formatCurrency
 import com.example.expensetrackerapp.ui.components.getCategoryColor
@@ -34,12 +36,15 @@ fun CategoryReportScreen(
     viewModel: ExpenseViewModel,
     onNavigateToTransactionDetail: (Long) -> Unit
 ) {
-    val currentMonth by viewModel.currentMonth.collectAsState()
-    val monthlyExpenses by viewModel.monthlyExpenses.collectAsState()
+    val currentDateRange by viewModel.currentDateRange.collectAsState()
+    val rangeExpenses by viewModel.rangeExpenses.collectAsState()
+
+    // State for custom date range dialog
+    var showCustomRangeDialog by remember { mutableStateOf(false) }
 
     // Group expenses by category
-    val expensesByCategory = remember(monthlyExpenses) {
-        monthlyExpenses.groupBy { it.category }
+    val expensesByCategory = remember(rangeExpenses) {
+        rangeExpenses.groupBy { it.category }
     }
 
     // Calculate total for each category
@@ -49,7 +54,7 @@ fun CategoryReportScreen(
         }
     }
 
-    // Total spending for the month
+    // Total spending for the period
     val totalSpending = remember(categoryTotals) {
         categoryTotals.values.sum()
     }
@@ -66,16 +71,17 @@ fun CategoryReportScreen(
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Month selector at the top
-        MonthYearSelector(
-            currentMonth = currentMonth,
-            onPreviousMonth = { viewModel.previousMonth() },
-            onNextMonth = { viewModel.nextMonth() }
+        // Date range selector at the top (replacing month selector)
+        DateRangeSelector(
+            currentRange = currentDateRange,
+            onPreviousRange = { viewModel.previousRange() },
+            onNextRange = { viewModel.nextRange() },
+            onCustomRangeClick = { showCustomRangeDialog = true }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Total spending for the month
+        // Total spending for the period
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -127,6 +133,18 @@ fun CategoryReportScreen(
                 }
             }
         }
+    }
+
+    // Custom date range dialog
+    if (showCustomRangeDialog) {
+        CustomDateRangeDialog(
+            currentRange = currentDateRange,
+            onDismiss = { showCustomRangeDialog = false },
+            onConfirm = { newRange ->
+                viewModel.setCurrentDateRange(newRange)
+                showCustomRangeDialog = false
+            }
+        )
     }
 }
 
@@ -263,7 +281,7 @@ fun EmptyReportState() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "No expenses for this month",
+                    text = "No expenses for this period", // Updated from "month" to "period"
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )

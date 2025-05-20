@@ -62,7 +62,7 @@ class InMemoryExpenseRepository {
     // Budget operations
     fun getBudgetsByMonth(monthYear: MonthYear): Flow<List<Budget>> {
         return _budgets.map { budgets ->
-            budgets.filter { it.monthYear == monthYear.toFormattedString() }
+            budgets.filter { it.dateRange == monthYear.toFormattedString() }
         }
     }
 
@@ -72,7 +72,7 @@ class InMemoryExpenseRepository {
     ): Flow<Budget?> {
         return _budgets.map { budgets ->
             budgets.find {
-                it.category == category && it.monthYear == monthYear.toFormattedString()
+                it.category == category && it.dateRange == monthYear.toFormattedString()
             }
         }
     }
@@ -80,7 +80,7 @@ class InMemoryExpenseRepository {
     suspend fun insertBudget(budget: Budget) {
         // First remove any existing budget for the same category and month
         _budgets.value = _budgets.value.filter {
-            !(it.category == budget.category && it.monthYear == budget.monthYear)
+            !(it.category == budget.category && it.dateRange == budget.dateRange)
         } + budget
     }
 }

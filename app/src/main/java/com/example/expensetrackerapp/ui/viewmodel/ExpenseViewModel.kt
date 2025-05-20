@@ -5,9 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.expensetrackerapp.data.model.Budget
 import com.example.expensetrackerapp.data.model.CategorySummary
+import com.example.expensetrackerapp.data.model.DateRange
 import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
-import com.example.expensetrackerapp.data.model.MonthYear
 import com.example.expensetrackerapp.data.model.MonthlySummary
 import com.example.expensetrackerapp.data.db.SQLiteExpenseRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,14 +18,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.threeten.bp.LocalDate
 
-
 class ExpenseViewModel(
     private val repository: SQLiteExpenseRepository
 ) : ViewModel() {
 
-    // Current selected month
-    private val _currentMonth = MutableStateFlow(MonthYear.current())
-    val currentMonth: StateFlow<MonthYear> = _currentMonth
+    // Current selected date range (replaced MonthYear)
+    private val _currentDateRange = MutableStateFlow(DateRange.customDefault())
+    val currentDateRange: StateFlow<DateRange> = _currentDateRange
 
     // Expose all expenses to support viewing any transaction detail
     val allExpenses: StateFlow<List<Expense>> = repository.expenses
@@ -35,12 +34,13 @@ class ExpenseViewModel(
             initialValue = emptyList()
         )
 
-    // Get expenses for the current month
-    val monthlyExpenses: StateFlow<List<Expense>> =
-        combine(currentMonth, repository.expenses) { month, allExpenses ->
-            allExpenses.filter {
-                val expenseMonth = MonthYear.fromLocalDate(it.date)
-                expenseMonth.month == month.month && expenseMonth.year == month.year
+    // Get expenses for the current date range
+    val rangeExpenses: StateFlow<List<Expense>> =
+        combine(currentDateRange, repository.expenses) { range, allExpenses ->
+            allExpenses.filter { expense ->
+                val expenseDate = expense.date
+                (expenseDate.isEqual(range.startDate) || expenseDate.isAfter(range.startDate)) &&
+                        (expenseDate.isEqual(range.endDate) || expenseDate.isBefore(range.endDate))
             }.sortedByDescending { it.date } // Sort by date, most recent first
         }.stateIn(
             scope = viewModelScope,
@@ -48,16 +48,16 @@ class ExpenseViewModel(
             initialValue = emptyList()
         )
 
-    // Get budgets for the current month
-    val monthlyBudgets: StateFlow<List<Budget>> =
-        combine(currentMonth, repository.budgets) { month, budgets ->
+    // Get budgets for the current date range
+    val rangeBudgets: StateFlow<List<Budget>> =
+        combine(currentDateRange, repository.budgets) { range, budgets ->
             // If any category doesn't have a budget, create a default one
             val existingCategories = budgets
-                .filter { it.monthYear == month.toFormattedString() }
+                .filter { it.dateRange == range.toFormattedString() }
                 .map { it.category }
 
             val allBudgets = budgets
-                .filter { it.monthYear == month.toFormattedString() }
+                .filter { it.dateRange == range.toFormattedString() }
                 .toMutableList()
 
             ExpenseCategory.values().forEach { category ->
@@ -66,7 +66,7 @@ class ExpenseViewModel(
                         Budget(
                             category = category,
                             amount = 0.0,
-                            monthYear = month.toFormattedString()
+                            dateRange = range.toFormattedString()
                         )
                     )
                 }
@@ -79,9 +79,9 @@ class ExpenseViewModel(
             initialValue = emptyList()
         )
 
-    // Calculate monthly summary
-    val monthlySummary: StateFlow<MonthlySummary> =
-        combine(currentMonth, monthlyExpenses, monthlyBudgets) { month, expenses, budgets ->
+    // Calculate range summary
+    val rangeSummary: StateFlow<MonthlySummary> =
+        combine(currentDateRange, rangeExpenses, rangeBudgets) { range, expenses, budgets ->
             // Calculate category summaries
             val categorySummaries = ExpenseCategory.values().map { category ->
                 val categoryExpenses = expenses.filter { it.category == category }
@@ -104,7 +104,7 @@ class ExpenseViewModel(
             val totalBudget = categorySummaries.sumOf { it.budget }
 
             MonthlySummary(
-                month = month,
+                dateRange = range, // Using correct parameter name
                 totalSpent = totalSpent,
                 totalBudget = totalBudget,
                 categorySummaries = categorySummaries
@@ -113,24 +113,24 @@ class ExpenseViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = MonthlySummary(
-                month = MonthYear.current(),
+                dateRange = DateRange.customDefault(), // Using correct parameter name
                 totalSpent = 0.0,
                 totalBudget = 0.0,
                 categorySummaries = emptyList()
             )
         )
 
-    // Functions for changing the current month
-    fun setCurrentMonth(monthYear: MonthYear) {
-        _currentMonth.value = monthYear
+    // Functions for changing the current date range
+    fun setCurrentDateRange(dateRange: DateRange) {
+        _currentDateRange.value = dateRange
     }
 
-    fun nextMonth() {
-        _currentMonth.value = _currentMonth.value.next()
+    fun nextRange() {
+        _currentDateRange.value = _currentDateRange.value.next()
     }
 
-    fun previousMonth() {
-        _currentMonth.value = _currentMonth.value.previous()
+    fun previousRange() {
+        _currentDateRange.value = _currentDateRange.value.previous()
     }
 
     // Expense CRUD operations
@@ -174,7 +174,7 @@ class ExpenseViewModel(
             val budget = Budget(
                 category = category,
                 amount = amount,
-                monthYear = _currentMonth.value.toFormattedString()
+                dateRange = _currentDateRange.value.toFormattedString()
             )
             repository.insertBudget(budget)
         }

@@ -12,27 +12,24 @@ class ExpenseDbHelper(context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
     companion object {
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2  // Incremented version number
         const val DATABASE_NAME = "ExpenseTracker.db"
 
         // Table names
         const val TABLE_EXPENSES = "expenses"
         const val TABLE_BUDGETS = "budgets"
 
-        // Common column names
+        // Column names
         const val COLUMN_ID = "id"
         const val COLUMN_CATEGORY = "category"
         const val COLUMN_AMOUNT = "amount"
-
-        // Expense table columns
         const val COLUMN_DESCRIPTION = "description"
         const val COLUMN_DATE = "date"
         const val COLUMN_RECEIPT_URI = "receipt_uri"
+        const val COLUMN_MONTH_YEAR = "month_year"  // For backward compatibility
+        const val COLUMN_DATE_RANGE = "date_range"  // New column for date ranges
 
-        // Budget table columns
-        const val COLUMN_MONTH_YEAR = "month_year"
-
-        // SQL statements for table creation
+        // SQL statements
         private const val SQL_CREATE_EXPENSES_TABLE = """
             CREATE TABLE $TABLE_EXPENSES (
                 $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,9 +45,14 @@ class ExpenseDbHelper(context: Context) :
             CREATE TABLE $TABLE_BUDGETS (
                 $COLUMN_CATEGORY TEXT NOT NULL,
                 $COLUMN_AMOUNT REAL NOT NULL,
-                $COLUMN_MONTH_YEAR TEXT NOT NULL,
-                PRIMARY KEY ($COLUMN_CATEGORY, $COLUMN_MONTH_YEAR)
+                $COLUMN_MONTH_YEAR TEXT,
+                $COLUMN_DATE_RANGE TEXT,
+                PRIMARY KEY ($COLUMN_CATEGORY, COALESCE($COLUMN_DATE_RANGE, $COLUMN_MONTH_YEAR))
             )
+        """
+
+        private const val SQL_ALTER_BUDGETS_TABLE = """
+            ALTER TABLE $TABLE_BUDGETS ADD COLUMN $COLUMN_DATE_RANGE TEXT
         """
     }
 
@@ -60,7 +62,9 @@ class ExpenseDbHelper(context: Context) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // This is version 1, so we don't need upgrade logic yet.
-        // In the future, handle schema migrations here
+        if (oldVersion < 2) {
+            // Migration to add date_range column
+            db.execSQL(SQL_ALTER_BUDGETS_TABLE)
+        }
     }
 }

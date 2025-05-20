@@ -32,9 +32,9 @@ fun TransactionEditScreen(
     onNavigateBack: () -> Unit
 ) {
     // Find the expense in the current monthly expenses
-    val monthlyExpenses by viewModel.monthlyExpenses.collectAsState()
-    val expense = remember(monthlyExpenses, expenseId) {
-        monthlyExpenses.find { it.id == expenseId }
+    val rangeExpenses by viewModel.rangeExpenses.collectAsState()
+    val expense = remember(rangeExpenses, expenseId) {
+        rangeExpenses.find { it.id == expenseId }
     }
 
     // If expense is null, show error state

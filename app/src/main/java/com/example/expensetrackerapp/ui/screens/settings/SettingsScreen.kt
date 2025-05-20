@@ -1,4 +1,3 @@
-// 13. Update SettingsScreen.kt to use ViewModel for budgets
 package com.example.expensetrackerapp.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
@@ -15,13 +14,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.expensetrackerapp.data.model.ExpenseCategory
+import com.example.expensetrackerapp.ui.components.CustomDateRangeDialog
 import com.example.expensetrackerapp.ui.theme.*
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 
 @Composable
 fun SettingsScreen(viewModel: ExpenseViewModel) {
-    val monthlyBudgets by viewModel.monthlyBudgets.collectAsState()
-    val currentMonth by viewModel.currentMonth.collectAsState()
+    val rangeBudgets by viewModel.rangeBudgets.collectAsState()
+    val currentDateRange by viewModel.currentDateRange.collectAsState()
+
+    // State for custom date range dialog
+    var showCustomRangeDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -34,6 +37,56 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(bottom = 16.dp)
         )
+
+        // Date Range selection card
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DateRange,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+
+                    Text(
+                        text = "Current Period",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = currentDateRange.toDisplayString(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = { showCustomRangeDialog = true },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Date Range"
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Customize Period")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Budget settings section
         ElevatedCard(
@@ -53,7 +106,7 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
                     )
 
                     Text(
-                        text = "Monthly Budget Settings for ${currentMonth.toDisplayString()}",
+                        text = "Budget Settings for ${currentDateRange.toDisplayString()}",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(start = 8.dp)
                     )
@@ -63,7 +116,7 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
 
                 // Budget settings for each category
                 ExpenseCategory.values().forEach { category ->
-                    val budget = monthlyBudgets.find { it.category == category }?.amount ?: 0.0
+                    val budget = rangeBudgets.find { it.category == category }?.amount ?: 0.0
                     BudgetSettingItem(
                         category = category,
                         currentBudget = budget,
@@ -78,6 +131,43 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Theme settings card
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+
+                    Text(
+                        text = "Theme Settings",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Theme options would go here
+                Text(
+                    text = "Dynamic theme based on system settings",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
 
         // App info
@@ -86,6 +176,18 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
+    }
+
+    // Custom date range dialog
+    if (showCustomRangeDialog) {
+        CustomDateRangeDialog(
+            currentRange = currentDateRange,
+            onDismiss = { showCustomRangeDialog = false },
+            onConfirm = { newRange ->
+                viewModel.setCurrentDateRange(newRange)
+                showCustomRangeDialog = false
+            }
         )
     }
 }

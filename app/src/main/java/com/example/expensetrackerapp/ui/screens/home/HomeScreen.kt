@@ -19,27 +19,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ElevatedCard
-
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.expensetrackerapp.data.model.DateRange
 import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.CategoryCard
-import com.example.expensetrackerapp.ui.components.MonthYearSelector
+import com.example.expensetrackerapp.ui.components.DateRangeSelector
+import com.example.expensetrackerapp.ui.components.CustomDateRangeDialog
 import com.example.expensetrackerapp.ui.components.MonthlySummaryCard
 import com.example.expensetrackerapp.ui.components.TransactionItem
-import com.example.expensetrackerapp.ui.components.formatCurrency
-import com.example.expensetrackerapp.ui.components.getCategoryColor
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
-import org.threeten.bp.format.DateTimeFormatter
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -48,30 +49,34 @@ fun HomeScreen(
     onNavigateToCategory: (ExpenseCategory) -> Unit,
     onNavigateToTransactionDetail: (Long) -> Unit
 ) {
-    val currentMonth by viewModel.currentMonth.collectAsState()
-    val monthlySummary by viewModel.monthlySummary.collectAsState()
-    val monthlyExpenses by viewModel.monthlyExpenses.collectAsState()
+    val currentDateRange by viewModel.currentDateRange.collectAsState()
+    val rangeSummary by viewModel.rangeSummary.collectAsState()
+    val rangeExpenses by viewModel.rangeExpenses.collectAsState()
+
+    // State for custom date range dialog
+    var showCustomRangeDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Month selector at the top
-        MonthYearSelector(
-            currentMonth = currentMonth,
-            onPreviousMonth = { viewModel.previousMonth() },
-            onNextMonth = { viewModel.nextMonth() }
+        // Date range selector at the top (replaces month selector)
+        DateRangeSelector(
+            currentRange = currentDateRange,
+            onPreviousRange = { viewModel.previousRange() },
+            onNextRange = { viewModel.nextRange() },
+            onCustomRangeClick = { showCustomRangeDialog = true }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Monthly spending summary
+        // Period spending summary (formerly monthly summary)
         MonthlySummaryCard(
-            totalSpent = monthlySummary.totalSpent,
-            totalBudget = monthlySummary.totalBudget,
-            percentage = if (monthlySummary.totalBudget > 0) {
-                (monthlySummary.totalSpent / monthlySummary.totalBudget).toFloat().coerceAtMost(1.0f)
+            totalSpent = rangeSummary.totalSpent,
+            totalBudget = rangeSummary.totalBudget,
+            percentage = if (rangeSummary.totalBudget > 0) {
+                (rangeSummary.totalSpent / rangeSummary.totalBudget).toFloat().coerceAtMost(1.0f)
             } else 0f
         )
 
@@ -90,7 +95,7 @@ fun HomeScreen(
             contentPadding = PaddingValues(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(monthlySummary.categorySummaries) { categorySummary ->
+            items(rangeSummary.categorySummaries) { categorySummary ->
                 CategoryCard(
                     categorySummary = categorySummary,
                     onAddExpense = { onNavigateToCategory(categorySummary.category) }
@@ -109,8 +114,8 @@ fun HomeScreen(
             }
 
             // Show recent transactions or a message if none exist
-            if (monthlyExpenses.isNotEmpty()) {
-                items(monthlyExpenses.take(5)) { expense ->
+            if (rangeExpenses.isNotEmpty()) {
+                items(rangeExpenses.take(5)) { expense ->
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -125,6 +130,18 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    // Custom date range dialog
+    if (showCustomRangeDialog) {
+        CustomDateRangeDialog(
+            currentRange = currentDateRange,
+            onDismiss = { showCustomRangeDialog = false },
+            onConfirm = { newRange ->
+                viewModel.setCurrentDateRange(newRange)
+                showCustomRangeDialog = false
+            }
+        )
     }
 }
 
@@ -142,7 +159,7 @@ fun EmptyTransactionsMessage() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "No expenses yet for this month",
+                text = "No expenses yet for this period",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium
             )

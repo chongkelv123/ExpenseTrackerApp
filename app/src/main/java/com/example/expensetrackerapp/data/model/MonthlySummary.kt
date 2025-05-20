@@ -2,7 +2,7 @@
 package com.example.expensetrackerapp.data.model
 
 data class MonthlySummary(
-    val month: MonthYear,
+    val dateRange: DateRange,
     val totalSpent: Double,
     val totalBudget: Double,
     val categorySummaries: List<CategorySummary>

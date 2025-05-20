@@ -217,12 +217,12 @@ class SQLiteExpenseRepository(context: Context) {
             val values = ContentValues().apply {
                 put(ExpenseDbHelper.COLUMN_CATEGORY, budget.category.name)
                 put(ExpenseDbHelper.COLUMN_AMOUNT, budget.amount)
-                put(ExpenseDbHelper.COLUMN_MONTH_YEAR, budget.monthYear)
+                put(ExpenseDbHelper.COLUMN_MONTH_YEAR, budget.dateRange)
             }
 
             // First check if budget already exists
             val selection = "${ExpenseDbHelper.COLUMN_CATEGORY} = ? AND ${ExpenseDbHelper.COLUMN_MONTH_YEAR} = ?"
-            val selectionArgs = arrayOf(budget.category.name, budget.monthYear)
+            val selectionArgs = arrayOf(budget.category.name, budget.dateRange)
 
             val cursor = db.query(
                 ExpenseDbHelper.TABLE_BUDGETS,
@@ -286,7 +286,7 @@ class SQLiteExpenseRepository(context: Context) {
                 Budget(
                     category = ExpenseCategory.valueOf(cursor.getString(categoryIndex)),
                     amount = cursor.getDouble(amountIndex),
-                    monthYear = cursor.getString(monthYearIndex)
+                    dateRange = cursor.getString(monthYearIndex)
                 )
             )
         }
@@ -298,6 +298,6 @@ class SQLiteExpenseRepository(context: Context) {
 
     // This method will get budgets for a specific month
     fun getBudgetsForMonth(monthYear: MonthYear): List<Budget> {
-        return budgets.value.filter { it.monthYear == monthYear.toFormattedString() }
+        return budgets.value.filter { it.dateRange == monthYear.toFormattedString() }
     }
 }
