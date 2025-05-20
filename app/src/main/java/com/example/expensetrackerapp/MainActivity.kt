@@ -21,6 +21,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 🔥 Delete SQLite DB for debugging (remove after use)
+//        deleteDatabase("ExpenseTracker.db")
+
         // Initialize ViewModel
         val repository = (application as ExpenseTrackerApplication).repository
         expenseViewModel = ViewModelProvider(this,
