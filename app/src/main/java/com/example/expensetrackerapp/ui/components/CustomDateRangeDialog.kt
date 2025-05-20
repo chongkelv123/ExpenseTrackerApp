@@ -104,44 +104,60 @@ fun CustomDateRangeDialog(
         }
     )
 
-    // Date picker dialogs
+    // Fixed date picker dialogs - properly updating the state
     if (showStartDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = TimeUnit.DAYS.toMillis(startDate.toEpochDay())
+        )
+
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    // Logic to update startDate
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val epochDay = TimeUnit.MILLISECONDS.toDays(millis)
+                        startDate = LocalDate.ofEpochDay(epochDay)
+                    }
                     showStartDatePicker = false
                 }) {
                     Text("OK")
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) {
+                    Text("Cancel")
+                }
             }
         ) {
-            DatePicker(
-                state = rememberDatePickerState(
-                    initialSelectedDateMillis = TimeUnit.DAYS.toMillis(startDate.toEpochDay())
-                )
-            )
+            DatePicker(state = datePickerState)
         }
     }
 
     if (showEndDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = TimeUnit.DAYS.toMillis(endDate.toEpochDay())
+        )
+
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    // Logic to update endDate
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val epochDay = TimeUnit.MILLISECONDS.toDays(millis)
+                        endDate = LocalDate.ofEpochDay(epochDay)
+                    }
                     showEndDatePicker = false
                 }) {
                     Text("OK")
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) {
+                    Text("Cancel")
+                }
             }
         ) {
-            DatePicker(
-                state = rememberDatePickerState(
-                    initialSelectedDateMillis = TimeUnit.DAYS.toMillis(endDate.toEpochDay())
-                )
-            )
+            DatePicker(state = datePickerState)
         }
     }
 }

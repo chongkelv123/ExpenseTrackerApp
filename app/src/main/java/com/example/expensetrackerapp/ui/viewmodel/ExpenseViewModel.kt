@@ -1,5 +1,6 @@
 package com.example.expensetrackerapp.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,6 +14,7 @@ import com.example.expensetrackerapp.data.db.SQLiteExpenseRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -21,6 +23,7 @@ import org.threeten.bp.LocalDate
 class ExpenseViewModel(
     private val repository: SQLiteExpenseRepository
 ) : ViewModel() {
+    private val TAG = "ExpenseViewModel"
 
     // Current selected date range (replaced MonthYear)
     private val _currentDateRange = MutableStateFlow(DateRange.customDefault())
@@ -28,6 +31,10 @@ class ExpenseViewModel(
 
     // Expose all expenses to support viewing any transaction detail
     val allExpenses: StateFlow<List<Expense>> = repository.expenses
+        .catch { e ->
+            Log.e(TAG, "Error in allExpenses flow: ${e.message}", e)
+            emit(emptyList())
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -37,100 +44,186 @@ class ExpenseViewModel(
     // Get expenses for the current date range
     val rangeExpenses: StateFlow<List<Expense>> =
         combine(currentDateRange, repository.expenses) { range, allExpenses ->
-            allExpenses.filter { expense ->
-                val expenseDate = expense.date
-                (expenseDate.isEqual(range.startDate) || expenseDate.isAfter(range.startDate)) &&
-                        (expenseDate.isEqual(range.endDate) || expenseDate.isBefore(range.endDate))
-            }.sortedByDescending { it.date } // Sort by date, most recent first
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+            try {
+                allExpenses.filter { expense ->
+                    val expenseDate = expense.date
+                    (expenseDate.isEqual(range.startDate) || expenseDate.isAfter(range.startDate)) &&
+                            (expenseDate.isEqual(range.endDate) || expenseDate.isBefore(range.endDate))
+                }.sortedByDescending { it.date } // Sort by date, most recent first
+            } catch (e: Exception) {
+                Log.e(TAG, "Error filtering expenses by range: ${e.message}", e)
+                emptyList()
+            }
+        }
+            .catch { e ->
+                Log.e(TAG, "Error in rangeExpenses flow: ${e.message}", e)
+                emit(emptyList())
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
 
     // Get budgets for the current date range
     val rangeBudgets: StateFlow<List<Budget>> =
         combine(currentDateRange, repository.budgets) { range, budgets ->
-            // If any category doesn't have a budget, create a default one
-            val existingCategories = budgets
-                .filter { it.dateRange == range.toFormattedString() }
-                .map { it.category }
+            try {
+                // If any category doesn't have a budget, create a default one
+                val rangeString = range.toFormattedString()
+                val existingCategories = budgets
+                    .filter { it.dateRange == rangeString }
+                    .map { it.category }
 
-            val allBudgets = budgets
-                .filter { it.dateRange == range.toFormattedString() }
-                .toMutableList()
+                val allBudgets = budgets
+                    .filter { it.dateRange == rangeString }
+                    .toMutableList()
 
-            ExpenseCategory.values().forEach { category ->
-                if (category !in existingCategories) {
-                    allBudgets.add(
-                        Budget(
-                            category = category,
-                            amount = 0.0,
-                            dateRange = range.toFormattedString()
+                ExpenseCategory.values().forEach { category ->
+                    if (category !in existingCategories) {
+                        allBudgets.add(
+                            Budget(
+                                category = category,
+                                amount = 0.0,
+                                dateRange = rangeString
+                            )
                         )
+                    }
+                }
+
+                allBudgets
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting budgets for range: ${e.message}", e)
+                // Return default empty budgets for each category
+                ExpenseCategory.values().map { category ->
+                    Budget(
+                        category = category,
+                        amount = 0.0,
+                        dateRange = range.toFormattedString()
                     )
                 }
             }
-
-            allBudgets
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+        }
+            .catch { e ->
+                Log.e(TAG, "Error in rangeBudgets flow: ${e.message}", e)
+                emit(emptyList())
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
 
     // Calculate range summary
     val rangeSummary: StateFlow<MonthlySummary> =
         combine(currentDateRange, rangeExpenses, rangeBudgets) { range, expenses, budgets ->
-            // Calculate category summaries
-            val categorySummaries = ExpenseCategory.values().map { category ->
-                val categoryExpenses = expenses.filter { it.category == category }
-                val totalSpent = categoryExpenses.sumOf { it.amount }
-                val categoryBudget = budgets.find { it.category == category }?.amount ?: 0.0
+            try {
+                // Calculate category summaries
+                val categorySummaries = ExpenseCategory.values().map { category ->
+                    val categoryExpenses = expenses.filter { it.category == category }
+                    val totalSpent = categoryExpenses.sumOf { it.amount }
+                    val categoryBudget = budgets.find { it.category == category }?.amount ?: 0.0
 
-                CategorySummary(
-                    category = category,
-                    spent = totalSpent,
-                    budget = categoryBudget,
-                    percentage = if (categoryBudget > 0) {
-                        (totalSpent / categoryBudget).toFloat().coerceAtMost(1.0f)
-                    } else 0f,
-                    remainingBudget = categoryBudget - totalSpent
+                    CategorySummary(
+                        category = category,
+                        spent = totalSpent,
+                        budget = categoryBudget,
+                        percentage = if (categoryBudget > 0) {
+                            (totalSpent / categoryBudget).toFloat().coerceAtMost(1.0f)
+                        } else 0f,
+                        remainingBudget = categoryBudget - totalSpent
+                    )
+                }
+
+                // Calculate total spent and budget
+                val totalSpent = categorySummaries.sumOf { it.spent }
+                val totalBudget = categorySummaries.sumOf { it.budget }
+
+                MonthlySummary(
+                    dateRange = range,
+                    totalSpent = totalSpent,
+                    totalBudget = totalBudget,
+                    categorySummaries = categorySummaries
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error calculating range summary: ${e.message}", e)
+                // Return empty summary
+                MonthlySummary(
+                    dateRange = range,
+                    totalSpent = 0.0,
+                    totalBudget = 0.0,
+                    categorySummaries = emptyList()
                 )
             }
-
-            // Calculate total spent and budget
-            val totalSpent = categorySummaries.sumOf { it.spent }
-            val totalBudget = categorySummaries.sumOf { it.budget }
-
-            MonthlySummary(
-                dateRange = range, // Using correct parameter name
-                totalSpent = totalSpent,
-                totalBudget = totalBudget,
-                categorySummaries = categorySummaries
+        }
+            .catch { e ->
+                Log.e(TAG, "Error in rangeSummary flow: ${e.message}", e)
+                emit(
+                    MonthlySummary(
+                        dateRange = _currentDateRange.value,
+                        totalSpent = 0.0,
+                        totalBudget = 0.0,
+                        categorySummaries = emptyList()
+                    )
+                )
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = MonthlySummary(
+                    dateRange = DateRange.customDefault(),
+                    totalSpent = 0.0,
+                    totalBudget = 0.0,
+                    categorySummaries = emptyList()
+                )
             )
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = MonthlySummary(
-                dateRange = DateRange.customDefault(), // Using correct parameter name
-                totalSpent = 0.0,
-                totalBudget = 0.0,
-                categorySummaries = emptyList()
-            )
-        )
 
     // Functions for changing the current date range
     fun setCurrentDateRange(dateRange: DateRange) {
-        _currentDateRange.value = dateRange
+        try {
+            _currentDateRange.value = dateRange
+            // When changing date range, ensure budgets exist for all categories
+            ensureBudgetsExistForRange(dateRange)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting current date range: ${e.message}", e)
+        }
+    }
+
+    private fun ensureBudgetsExistForRange(dateRange: DateRange) {
+        viewModelScope.launch {
+            try {
+                val rangeString = dateRange.toFormattedString()
+                val existingBudgets = rangeBudgets.value
+                val existingCategories = existingBudgets.map { it.category }
+
+                // Create default budgets for any missing categories
+                ExpenseCategory.values().forEach { category ->
+                    if (category !in existingCategories) {
+                        updateBudget(category, 0.0)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error ensuring budgets exist: ${e.message}", e)
+            }
+        }
     }
 
     fun nextRange() {
-        _currentDateRange.value = _currentDateRange.value.next()
+        try {
+            val nextRange = _currentDateRange.value.next()
+            setCurrentDateRange(nextRange)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting next range: ${e.message}", e)
+        }
     }
 
     fun previousRange() {
-        _currentDateRange.value = _currentDateRange.value.previous()
+        try {
+            val prevRange = _currentDateRange.value.previous()
+            setCurrentDateRange(prevRange)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting previous range: ${e.message}", e)
+        }
     }
 
     // Expense CRUD operations
@@ -141,42 +234,63 @@ class ExpenseViewModel(
         date: LocalDate = LocalDate.now()
     ) {
         viewModelScope.launch {
-            val expense = Expense(
-                category = category,
-                amount = amount,
-                description = description,
-                date = date
-            )
-            repository.insertExpense(expense)
+            try {
+                val expense = Expense(
+                    category = category,
+                    amount = amount,
+                    description = description,
+                    date = date
+                )
+                repository.insertExpense(expense)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error adding expense: ${e.message}", e)
+            }
         }
     }
 
     fun updateExpense(expense: Expense) {
         viewModelScope.launch {
-            repository.updateExpense(expense)
+            try {
+                repository.updateExpense(expense)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating expense: ${e.message}", e)
+            }
         }
     }
 
     fun deleteExpense(expense: Expense) {
         viewModelScope.launch {
-            repository.deleteExpense(expense)
+            try {
+                repository.deleteExpense(expense)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error deleting expense: ${e.message}", e)
+            }
         }
     }
 
     // Function to get single expense by ID
     suspend fun getExpenseById(id: Long): Expense? {
-        return repository.getExpenseById(id)
+        return try {
+            repository.getExpenseById(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting expense by ID: ${e.message}", e)
+            null
+        }
     }
 
     // Budget operations
     fun updateBudget(category: ExpenseCategory, amount: Double) {
         viewModelScope.launch {
-            val budget = Budget(
-                category = category,
-                amount = amount,
-                dateRange = _currentDateRange.value.toFormattedString()
-            )
-            repository.insertBudget(budget)
+            try {
+                val budget = Budget(
+                    category = category,
+                    amount = amount,
+                    dateRange = _currentDateRange.value.toFormattedString()
+                )
+                repository.insertBudget(budget)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating budget: ${e.message}", e)
+            }
         }
     }
 

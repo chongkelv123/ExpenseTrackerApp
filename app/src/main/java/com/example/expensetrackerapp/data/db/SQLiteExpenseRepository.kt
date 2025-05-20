@@ -3,11 +3,11 @@ package com.example.expensetrackerapp.data.db
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
+import android.util.Log
 import com.example.expensetrackerapp.data.model.Budget
 import com.example.expensetrackerapp.data.model.DateRange
 import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
-import com.example.expensetrackerapp.data.model.MonthYear
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,10 +22,10 @@ import org.threeten.bp.LocalDate
  * Handles data access operations for expenses and budgets.
  */
 class SQLiteExpenseRepository(context: Context) {
+    private val TAG = "SQLiteExpenseRepository"
     private val dbHelper = ExpenseDbHelper(context)
     private val ioDispatcher = Dispatchers.IO.limitedParallelism(1) // Single thread for DB operations
     private val scope = MainScope() // Scope for repository-level coroutines
-
 
     // StateFlows to provide reactive data access
     private val _expenses = MutableStateFlow<List<Expense>>(emptyList())
@@ -37,142 +37,183 @@ class SQLiteExpenseRepository(context: Context) {
     init {
         // Load initial data without blocking initialization
         scope.launch {
-            refreshExpenses()
-            refreshBudgets()
+            try {
+                refreshExpenses()
+                refreshBudgets()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error initializing repository: ${e.message}", e)
+            }
         }
     }
 
     // Refreshes the expenses StateFlow with current database data
     private suspend fun refreshExpenses() = withContext(ioDispatcher) {
-        val expenses = getAllExpensesFromDb()
-        _expenses.update { expenses }
+        try {
+            val expenses = getAllExpensesFromDb()
+            _expenses.update { expenses }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error refreshing expenses: ${e.message}", e)
+        }
     }
 
     // Refreshes the budgets StateFlow with current database data
     private suspend fun refreshBudgets() = withContext(ioDispatcher) {
-        val budgets = getAllBudgetsFromDb()
-        _budgets.update { budgets }
+        try {
+            val budgets = getAllBudgetsFromDb()
+            _budgets.update { budgets }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error refreshing budgets: ${e.message}", e)
+        }
     }
 
     // EXPENSE OPERATIONS
 
     suspend fun insertExpense(expense: Expense): Long = withContext(ioDispatcher) {
-        val db = dbHelper.writableDatabase
+        try {
+            val db = dbHelper.writableDatabase
 
-        val values = ContentValues().apply {
-            put(ExpenseDbHelper.COLUMN_CATEGORY, expense.category.name)
-            put(ExpenseDbHelper.COLUMN_AMOUNT, expense.amount)
-            put(ExpenseDbHelper.COLUMN_DESCRIPTION, expense.description)
-            put(ExpenseDbHelper.COLUMN_DATE, expense.date.toString())
-            expense.receiptUri?.let { put(ExpenseDbHelper.COLUMN_RECEIPT_URI, it) }
+            val values = ContentValues().apply {
+                put(ExpenseDbHelper.COLUMN_CATEGORY, expense.category.name)
+                put(ExpenseDbHelper.COLUMN_AMOUNT, expense.amount)
+                put(ExpenseDbHelper.COLUMN_DESCRIPTION, expense.description)
+                put(ExpenseDbHelper.COLUMN_DATE, expense.date.toString())
+                expense.receiptUri?.let { put(ExpenseDbHelper.COLUMN_RECEIPT_URI, it) }
+            }
+
+            val newId = db.insert(ExpenseDbHelper.TABLE_EXPENSES, null, values)
+            refreshExpenses()
+            newId
+        } catch (e: Exception) {
+            Log.e(TAG, "Error inserting expense: ${e.message}", e)
+            -1 // Return invalid ID on error
         }
-
-        val newId = db.insert(ExpenseDbHelper.TABLE_EXPENSES, null, values)
-        refreshExpenses()
-        newId
     }
 
     suspend fun updateExpense(expense: Expense) = withContext(ioDispatcher) {
-        val db = dbHelper.writableDatabase
+        try {
+            val db = dbHelper.writableDatabase
 
-        val values = ContentValues().apply {
-            put(ExpenseDbHelper.COLUMN_CATEGORY, expense.category.name)
-            put(ExpenseDbHelper.COLUMN_AMOUNT, expense.amount)
-            put(ExpenseDbHelper.COLUMN_DESCRIPTION, expense.description)
-            put(ExpenseDbHelper.COLUMN_DATE, expense.date.toString())
-            expense.receiptUri?.let { put(ExpenseDbHelper.COLUMN_RECEIPT_URI, it) }
+            val values = ContentValues().apply {
+                put(ExpenseDbHelper.COLUMN_CATEGORY, expense.category.name)
+                put(ExpenseDbHelper.COLUMN_AMOUNT, expense.amount)
+                put(ExpenseDbHelper.COLUMN_DESCRIPTION, expense.description)
+                put(ExpenseDbHelper.COLUMN_DATE, expense.date.toString())
+                expense.receiptUri?.let { put(ExpenseDbHelper.COLUMN_RECEIPT_URI, it) }
+            }
+
+            val selection = "${ExpenseDbHelper.COLUMN_ID} = ?"
+            val selectionArgs = arrayOf(expense.id.toString())
+
+            db.update(
+                ExpenseDbHelper.TABLE_EXPENSES,
+                values,
+                selection,
+                selectionArgs
+            )
+
+            refreshExpenses()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating expense: ${e.message}", e)
         }
-
-        val selection = "${ExpenseDbHelper.COLUMN_ID} = ?"
-        val selectionArgs = arrayOf(expense.id.toString())
-
-        db.update(
-            ExpenseDbHelper.TABLE_EXPENSES,
-            values,
-            selection,
-            selectionArgs
-        )
-
-        refreshExpenses()
     }
 
     suspend fun deleteExpense(expense: Expense) = withContext(ioDispatcher) {
-        val db = dbHelper.writableDatabase
+        try {
+            val db = dbHelper.writableDatabase
 
-        val selection = "${ExpenseDbHelper.COLUMN_ID} = ?"
-        val selectionArgs = arrayOf(expense.id.toString())
+            val selection = "${ExpenseDbHelper.COLUMN_ID} = ?"
+            val selectionArgs = arrayOf(expense.id.toString())
 
-        db.delete(ExpenseDbHelper.TABLE_EXPENSES, selection, selectionArgs)
+            db.delete(ExpenseDbHelper.TABLE_EXPENSES, selection, selectionArgs)
 
-        refreshExpenses()
+            refreshExpenses()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting expense: ${e.message}", e)
+        }
     }
 
     suspend fun getExpenseById(id: Long): Expense? = withContext(ioDispatcher) {
-        val db = dbHelper.readableDatabase
+        try {
+            val db = dbHelper.readableDatabase
 
-        val projection = arrayOf(
-            ExpenseDbHelper.COLUMN_ID,
-            ExpenseDbHelper.COLUMN_CATEGORY,
-            ExpenseDbHelper.COLUMN_AMOUNT,
-            ExpenseDbHelper.COLUMN_DESCRIPTION,
-            ExpenseDbHelper.COLUMN_DATE,
-            ExpenseDbHelper.COLUMN_RECEIPT_URI
-        )
+            val projection = arrayOf(
+                ExpenseDbHelper.COLUMN_ID,
+                ExpenseDbHelper.COLUMN_CATEGORY,
+                ExpenseDbHelper.COLUMN_AMOUNT,
+                ExpenseDbHelper.COLUMN_DESCRIPTION,
+                ExpenseDbHelper.COLUMN_DATE,
+                ExpenseDbHelper.COLUMN_RECEIPT_URI
+            )
 
-        val selection = "${ExpenseDbHelper.COLUMN_ID} = ?"
-        val selectionArgs = arrayOf(id.toString())
+            val selection = "${ExpenseDbHelper.COLUMN_ID} = ?"
+            val selectionArgs = arrayOf(id.toString())
 
-        val cursor = db.query(
-            ExpenseDbHelper.TABLE_EXPENSES,
-            projection,
-            selection,
-            selectionArgs,
-            null,
-            null,
+            val cursor = db.query(
+                ExpenseDbHelper.TABLE_EXPENSES,
+                projection,
+                selection,
+                selectionArgs,
+                null,
+                null,
+                null
+            )
+
+            var expense: Expense? = null
+
+            if (cursor.moveToFirst()) {
+                expense = cursorToExpense(cursor)
+            }
+
+            cursor.close()
+
+            expense
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting expense by ID: ${e.message}", e)
             null
-        )
-
-        var expense: Expense? = null
-
-        if (cursor.moveToFirst()) {
-            expense = cursorToExpense(cursor)
         }
-
-        cursor.close()
-
-        expense
     }
 
     private suspend fun getAllExpensesFromDb(): List<Expense> = withContext(ioDispatcher) {
         val expenses = mutableListOf<Expense>()
-        val db = dbHelper.readableDatabase
+        var cursor: Cursor? = null
 
-        val projection = arrayOf(
-            ExpenseDbHelper.COLUMN_ID,
-            ExpenseDbHelper.COLUMN_CATEGORY,
-            ExpenseDbHelper.COLUMN_AMOUNT,
-            ExpenseDbHelper.COLUMN_DESCRIPTION,
-            ExpenseDbHelper.COLUMN_DATE,
-            ExpenseDbHelper.COLUMN_RECEIPT_URI
-        )
+        try {
+            val db = dbHelper.readableDatabase
 
-        val sortOrder = "${ExpenseDbHelper.COLUMN_DATE} DESC"
+            val projection = arrayOf(
+                ExpenseDbHelper.COLUMN_ID,
+                ExpenseDbHelper.COLUMN_CATEGORY,
+                ExpenseDbHelper.COLUMN_AMOUNT,
+                ExpenseDbHelper.COLUMN_DESCRIPTION,
+                ExpenseDbHelper.COLUMN_DATE,
+                ExpenseDbHelper.COLUMN_RECEIPT_URI
+            )
 
-        val cursor = db.query(
-            ExpenseDbHelper.TABLE_EXPENSES,
-            projection,
-            null,
-            null,
-            null,
-            null,
-            sortOrder
-        )
+            val sortOrder = "${ExpenseDbHelper.COLUMN_DATE} DESC"
 
-        while (cursor.moveToNext()) {
-            expenses.add(cursorToExpense(cursor))
+            cursor = db.query(
+                ExpenseDbHelper.TABLE_EXPENSES,
+                projection,
+                null,
+                null,
+                null,
+                null,
+                sortOrder
+            )
+
+            while (cursor.moveToNext()) {
+                try {
+                    expenses.add(cursorToExpense(cursor))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing expense from cursor: ${e.message}", e)
+                    // Continue to next record
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting all expenses: ${e.message}", e)
+        } finally {
+            cursor?.close()
         }
-
-        cursor.close()
 
         expenses
     }
@@ -190,6 +231,7 @@ class SQLiteExpenseRepository(context: Context) {
             category = try {
                 ExpenseCategory.valueOf(cursor.getString(categoryIndex))
             } catch (e: Exception) {
+                Log.w(TAG, "Unknown category, using OTHERS: ${e.message}")
                 ExpenseCategory.OTHERS // Fallback if category can't be parsed
             },
             amount = cursor.getDouble(amountIndex),
@@ -197,6 +239,7 @@ class SQLiteExpenseRepository(context: Context) {
             date = try {
                 LocalDate.parse(cursor.getString(dateIndex))
             } catch (e: Exception) {
+                Log.w(TAG, "Error parsing date, using current date: ${e.message}")
                 LocalDate.now() // Fallback if date can't be parsed
             },
             receiptUri = if (cursor.isNull(receiptUriIndex)) null else cursor.getString(receiptUriIndex)
@@ -206,92 +249,120 @@ class SQLiteExpenseRepository(context: Context) {
     // BUDGET OPERATIONS
 
     suspend fun insertBudget(budget: Budget) = withContext(ioDispatcher) {
-        val db = dbHelper.writableDatabase
+        try {
+            val db = dbHelper.writableDatabase
 
-        val values = ContentValues().apply {
-            put(ExpenseDbHelper.COLUMN_CATEGORY, budget.category.name)
-            put(ExpenseDbHelper.COLUMN_AMOUNT, budget.amount)
-            put(ExpenseDbHelper.COLUMN_MONTH_YEAR, budget.dateRange)
-        }
+            val values = ContentValues().apply {
+                put(ExpenseDbHelper.COLUMN_CATEGORY, budget.category.name)
+                put(ExpenseDbHelper.COLUMN_AMOUNT, budget.amount)
+                // Consistently use DATE_RANGE column, but also set MONTH_YEAR for backward compatibility
+                put(ExpenseDbHelper.COLUMN_DATE_RANGE, budget.dateRange)
+                put(ExpenseDbHelper.COLUMN_MONTH_YEAR, budget.dateRange)
+            }
 
-        // First check if budget already exists
-        val selection = "${ExpenseDbHelper.COLUMN_CATEGORY} = ? AND ${ExpenseDbHelper.COLUMN_MONTH_YEAR} = ?"
-        val selectionArgs = arrayOf(budget.category.name, budget.dateRange)
+            // Check if budget already exists
+            val selection = "${ExpenseDbHelper.COLUMN_CATEGORY} = ? AND ${ExpenseDbHelper.COLUMN_DATE_RANGE} = ?"
+            val selectionArgs = arrayOf(budget.category.name, budget.dateRange)
 
-        val cursor = db.query(
-            ExpenseDbHelper.TABLE_BUDGETS,
-            null,
-            selection,
-            selectionArgs,
-            null,
-            null,
-            null
-        )
-
-        val exists = cursor.count > 0
-        cursor.close()
-
-        if (exists) {
-            // Update existing budget
-            db.update(
+            val cursor = db.query(
                 ExpenseDbHelper.TABLE_BUDGETS,
-                values,
+                null,
                 selection,
-                selectionArgs
+                selectionArgs,
+                null,
+                null,
+                null
             )
-        } else {
-            // Insert new budget
-            db.insert(ExpenseDbHelper.TABLE_BUDGETS, null, values)
-        }
 
-        refreshBudgets()
+            val exists = cursor.count > 0
+            cursor.close()
+
+            if (exists) {
+                // Update existing budget
+                db.update(
+                    ExpenseDbHelper.TABLE_BUDGETS,
+                    values,
+                    selection,
+                    selectionArgs
+                )
+            } else {
+                // Insert new budget
+                db.insert(ExpenseDbHelper.TABLE_BUDGETS, null, values)
+            }
+
+            refreshBudgets()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error inserting budget: ${e.message}", e)
+        }
     }
 
     private suspend fun getAllBudgetsFromDb(): List<Budget> = withContext(ioDispatcher) {
         val budgets = mutableListOf<Budget>()
-        val db = dbHelper.readableDatabase
+        var cursor: Cursor? = null
 
-        val projection = arrayOf(
-            ExpenseDbHelper.COLUMN_CATEGORY,
-            ExpenseDbHelper.COLUMN_AMOUNT,
-            ExpenseDbHelper.COLUMN_MONTH_YEAR
-        )
+        try {
+            val db = dbHelper.readableDatabase
 
-        val cursor = db.query(
-            ExpenseDbHelper.TABLE_BUDGETS,
-            projection,
-            null,
-            null,
-            null,
-            null,
-            null
-        )
+            val projection = arrayOf(
+                ExpenseDbHelper.COLUMN_CATEGORY,
+                ExpenseDbHelper.COLUMN_AMOUNT,
+                ExpenseDbHelper.COLUMN_DATE_RANGE,
+                ExpenseDbHelper.COLUMN_MONTH_YEAR
+            )
 
-        while (cursor.moveToNext()) {
+            cursor = db.query(
+                ExpenseDbHelper.TABLE_BUDGETS,
+                projection,
+                null,
+                null,
+                null,
+                null,
+                null
+            )
+
             val categoryIndex = cursor.getColumnIndexOrThrow(ExpenseDbHelper.COLUMN_CATEGORY)
             val amountIndex = cursor.getColumnIndexOrThrow(ExpenseDbHelper.COLUMN_AMOUNT)
+            // Try to get DATE_RANGE first, fall back to MONTH_YEAR if needed
+            val dateRangeIndex = cursor.getColumnIndex(ExpenseDbHelper.COLUMN_DATE_RANGE)
             val monthYearIndex = cursor.getColumnIndexOrThrow(ExpenseDbHelper.COLUMN_MONTH_YEAR)
 
-            budgets.add(
-                Budget(
-                    category = try {
-                        ExpenseCategory.valueOf(cursor.getString(categoryIndex))
-                    } catch (e: Exception) {
-                        ExpenseCategory.OTHERS
-                    },
-                    amount = cursor.getDouble(amountIndex),
-                    dateRange = cursor.getString(monthYearIndex)
-                )
-            )
-        }
+            while (cursor.moveToNext()) {
+                try {
+                    val dateRangeValue = if (dateRangeIndex != -1 && !cursor.isNull(dateRangeIndex)) {
+                        cursor.getString(dateRangeIndex)
+                    } else {
+                        cursor.getString(monthYearIndex)
+                    }
 
-        cursor.close()
+                    budgets.add(
+                        Budget(
+                            category = try {
+                                ExpenseCategory.valueOf(cursor.getString(categoryIndex))
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Unknown budget category, using OTHERS: ${e.message}")
+                                ExpenseCategory.OTHERS
+                            },
+                            amount = cursor.getDouble(amountIndex),
+                            dateRange = dateRangeValue
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing budget from cursor: ${e.message}", e)
+                    // Continue to next record
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting all budgets: ${e.message}", e)
+        } finally {
+            cursor?.close()
+        }
 
         budgets
     }
 
-    // This method will get budgets for a specific month
-    fun getBudgetsForMonth(dateRange: DateRange): List<Budget> {
-        return budgets.value.filter { it.dateRange == dateRange.toFormattedString() }
+    // This method will get budgets for a specific date range
+    fun getBudgetsForRange(dateRange: DateRange): List<Budget> {
+        val rangeString = dateRange.toFormattedString()
+        return budgets.value.filter { it.dateRange == rangeString }
     }
 }
