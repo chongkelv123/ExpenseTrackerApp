@@ -57,10 +57,12 @@ class SQLiteExpenseRepository(context: Context) {
     }
 
     // Refreshes the budgets StateFlow with current database data
-    private suspend fun refreshBudgets() = withContext(ioDispatcher) {
+    suspend fun refreshBudgets() = withContext(ioDispatcher) {
         try {
+            Log.d(TAG, "Forcing budget refresh")
             val budgets = getAllBudgetsFromDb()
             _budgets.update { budgets }
+            Log.d(TAG, "Budget refresh complete, found ${budgets.size} budgets")
         } catch (e: Exception) {
             Log.e(TAG, "Error refreshing budgets: ${e.message}", e)
         }
@@ -365,4 +367,6 @@ class SQLiteExpenseRepository(context: Context) {
         val rangeString = dateRange.toFormattedString()
         return budgets.value.filter { it.dateRange == rangeString }
     }
+
+
 }

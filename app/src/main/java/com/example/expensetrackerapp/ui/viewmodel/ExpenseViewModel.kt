@@ -328,12 +328,22 @@ class ExpenseViewModel(
     fun updateBudget(category: ExpenseCategory, amount: Double) {
         viewModelScope.launch {
             try {
+                Log.d(TAG, "Updating budget for ${category.name} to $amount for range: ${_currentDateRange.value.toFormattedString()}")
+
+                // Create a budget object with the current date range
                 val budget = Budget(
                     category = category,
                     amount = amount,
                     dateRange = _currentDateRange.value.toFormattedString()
                 )
+
+                // Save the budget to the repository
                 repository.insertBudget(budget)
+
+                // Explicitly refresh the budgets to ensure the flow is updated
+                repository.refreshBudgets()
+
+                Log.d(TAG, "Budget update and refresh completed for ${category.name}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating budget: ${e.message}", e)
             }
@@ -352,4 +362,5 @@ class ExpenseViewModel(
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }
+
 }
