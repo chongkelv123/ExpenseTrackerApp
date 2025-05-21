@@ -24,6 +24,7 @@ import com.example.expensetrackerapp.data.model.DateRange
 import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.DateRangeSelector
+import com.example.expensetrackerapp.ui.components.DateRangeType
 import com.example.expensetrackerapp.ui.components.CustomDateRangeDialog
 import com.example.expensetrackerapp.ui.components.TransactionItem
 import com.example.expensetrackerapp.ui.components.formatCurrency
@@ -38,6 +39,7 @@ fun CategoryReportScreen(
 ) {
     val currentDateRange by viewModel.currentDateRange.collectAsState()
     val rangeExpenses by viewModel.rangeExpenses.collectAsState()
+    val currentRangeType by viewModel.currentRangeType.collectAsState()
 
     // State for custom date range dialog
     var showCustomRangeDialog by remember { mutableStateOf(false) }
@@ -71,12 +73,13 @@ fun CategoryReportScreen(
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Date range selector at the top (replacing month selector)
+        // Enhanced Date range selector
         DateRangeSelector(
             currentRange = currentDateRange,
             onPreviousRange = { viewModel.previousRange() },
             onNextRange = { viewModel.nextRange() },
-            onCustomRangeClick = { showCustomRangeDialog = true }
+            onCustomRangeClick = { showCustomRangeDialog = true },
+            onRangeTypeChange = { newType -> viewModel.setDateRangeType(newType) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -107,7 +110,7 @@ fun CategoryReportScreen(
 
         if (expensesByCategory.isEmpty()) {
             // Empty state
-            EmptyReportState()
+            EmptyReportState(currentDateRange)
         } else {
             // List of categories with their expenses
             LazyColumn(
@@ -266,7 +269,7 @@ fun CategoryExpenseItem(
 }
 
 @Composable
-fun EmptyReportState() {
+fun EmptyReportState(currentRange: DateRange) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -281,7 +284,7 @@ fun EmptyReportState() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "No expenses for this period", // Updated from "month" to "period"
+                    text = "No expenses for ${currentRange.toDisplayString()}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )

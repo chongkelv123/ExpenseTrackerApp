@@ -37,6 +37,7 @@ import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.CategoryCard
 import com.example.expensetrackerapp.ui.components.DateRangeSelector
+import com.example.expensetrackerapp.ui.components.DateRangeType
 import com.example.expensetrackerapp.ui.components.CustomDateRangeDialog
 import com.example.expensetrackerapp.ui.components.MonthlySummaryCard
 import com.example.expensetrackerapp.ui.components.TransactionItem
@@ -52,6 +53,7 @@ fun HomeScreen(
     val currentDateRange by viewModel.currentDateRange.collectAsState()
     val rangeSummary by viewModel.rangeSummary.collectAsState()
     val rangeExpenses by viewModel.rangeExpenses.collectAsState()
+    val currentRangeType by viewModel.currentRangeType.collectAsState()
 
     // State for custom date range dialog
     var showCustomRangeDialog by remember { mutableStateOf(false) }
@@ -61,17 +63,18 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Date range selector at the top (replaces month selector)
+        // Enhanced Date Range Selector
         DateRangeSelector(
             currentRange = currentDateRange,
             onPreviousRange = { viewModel.previousRange() },
             onNextRange = { viewModel.nextRange() },
-            onCustomRangeClick = { showCustomRangeDialog = true }
+            onCustomRangeClick = { showCustomRangeDialog = true },
+            onRangeTypeChange = { newType -> viewModel.setDateRangeType(newType) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Period spending summary (formerly monthly summary)
+        // Period spending summary
         MonthlySummaryCard(
             totalSpent = rangeSummary.totalSpent,
             totalBudget = rangeSummary.totalBudget,
@@ -126,7 +129,7 @@ fun HomeScreen(
                 }
             } else {
                 item {
-                    EmptyTransactionsMessage()
+                    EmptyTransactionsMessage(currentDateRange)
                 }
             }
         }
@@ -146,7 +149,7 @@ fun HomeScreen(
 }
 
 @Composable
-fun EmptyTransactionsMessage() {
+fun EmptyTransactionsMessage(dateRange: DateRange) {
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -159,7 +162,7 @@ fun EmptyTransactionsMessage() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "No expenses yet for this period",
+                text = "No expenses for ${dateRange.toDisplayString()}",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium
             )

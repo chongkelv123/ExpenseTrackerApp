@@ -11,6 +11,7 @@ import com.example.expensetrackerapp.data.model.Expense
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.data.model.MonthlySummary
 import com.example.expensetrackerapp.data.db.SQLiteExpenseRepository
+import com.example.expensetrackerapp.ui.components.DateRangeType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,13 +20,18 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.threeten.bp.LocalDate
+import org.threeten.bp.YearMonth
 
 class ExpenseViewModel(
     private val repository: SQLiteExpenseRepository
 ) : ViewModel() {
     private val TAG = "ExpenseViewModel"
 
-    // Current selected date range (replaced MonthYear)
+    // Current selected date range type
+    private val _currentRangeType = MutableStateFlow(DateRangeType.BUDGET_CYCLE)
+    val currentRangeType: StateFlow<DateRangeType> = _currentRangeType
+
+    // Current selected date range (default to budget cycle)
     private val _currentDateRange = MutableStateFlow(DateRange.customDefault())
     val currentDateRange: StateFlow<DateRange> = _currentDateRange
 
@@ -178,12 +184,38 @@ class ExpenseViewModel(
                 )
             )
 
+    // Set date range type and update current range accordingly
+    fun setDateRangeType(type: DateRangeType) {
+        try {
+            _currentRangeType.value = type
+
+            // Update the current date range based on the selected type
+            val newRange = when (type) {
+                DateRangeType.BUDGET_CYCLE -> DateRange.customDefault()
+                DateRangeType.CALENDAR_MONTH -> DateRange.currentCalendarMonth()
+                DateRangeType.CUSTOM -> _currentDateRange.value // Keep current if custom
+            }
+
+            setCurrentDateRange(newRange)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting date range type: ${e.message}", e)
+        }
+    }
+
     // Functions for changing the current date range
     fun setCurrentDateRange(dateRange: DateRange) {
         try {
             _currentDateRange.value = dateRange
+
             // When changing date range, ensure budgets exist for all categories
             ensureBudgetsExistForRange(dateRange)
+
+            // Update the range type based on the range characteristics
+            _currentRangeType.value = when {
+                dateRange.isBudgetCycle() -> DateRangeType.BUDGET_CYCLE
+                dateRange.isCalendarMonth() -> DateRangeType.CALENDAR_MONTH
+                else -> DateRangeType.CUSTOM
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error setting current date range: ${e.message}", e)
         }
@@ -210,7 +242,14 @@ class ExpenseViewModel(
 
     fun nextRange() {
         try {
-            val nextRange = _currentDateRange.value.next()
+            val nextRange = when (_currentRangeType.value) {
+                DateRangeType.BUDGET_CYCLE -> _currentDateRange.value.nextBudgetCycle()
+                DateRangeType.CALENDAR_MONTH -> {
+                    val currentYearMonth = YearMonth.from(_currentDateRange.value.startDate)
+                    DateRange.forCalendarMonth(currentYearMonth.plusMonths(1))
+                }
+                DateRangeType.CUSTOM -> _currentDateRange.value.next()
+            }
             setCurrentDateRange(nextRange)
         } catch (e: Exception) {
             Log.e(TAG, "Error setting next range: ${e.message}", e)
@@ -219,7 +258,14 @@ class ExpenseViewModel(
 
     fun previousRange() {
         try {
-            val prevRange = _currentDateRange.value.previous()
+            val prevRange = when (_currentRangeType.value) {
+                DateRangeType.BUDGET_CYCLE -> _currentDateRange.value.previousBudgetCycle()
+                DateRangeType.CALENDAR_MONTH -> {
+                    val currentYearMonth = YearMonth.from(_currentDateRange.value.startDate)
+                    DateRange.forCalendarMonth(currentYearMonth.minusMonths(1))
+                }
+                DateRangeType.CUSTOM -> _currentDateRange.value.previous()
+            }
             setCurrentDateRange(prevRange)
         } catch (e: Exception) {
             Log.e(TAG, "Error setting previous range: ${e.message}", e)
