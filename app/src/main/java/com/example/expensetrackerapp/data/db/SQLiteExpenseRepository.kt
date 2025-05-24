@@ -249,7 +249,6 @@ class SQLiteExpenseRepository(context: Context) {
     }
 
     // BUDGET OPERATIONS
-
     suspend fun insertBudget(budget: Budget) = withContext(ioDispatcher) {
         try {
             val db = dbHelper.writableDatabase
@@ -257,42 +256,25 @@ class SQLiteExpenseRepository(context: Context) {
             val values = ContentValues().apply {
                 put(ExpenseDbHelper.COLUMN_CATEGORY, budget.category.name)
                 put(ExpenseDbHelper.COLUMN_AMOUNT, budget.amount)
-                // Consistently use DATE_RANGE column, but also set MONTH_YEAR for backward compatibility
                 put(ExpenseDbHelper.COLUMN_DATE_RANGE, budget.dateRange)
                 put(ExpenseDbHelper.COLUMN_MONTH_YEAR, budget.dateRange)
             }
 
-            // Check if budget already exists
-            val selection = "${ExpenseDbHelper.COLUMN_CATEGORY} = ? AND ${ExpenseDbHelper.COLUMN_DATE_RANGE} = ?"
-            val selectionArgs = arrayOf(budget.category.name, budget.dateRange)
+            // We're going to use a simpler approach - delete and insert
+            // This avoids any issues with updates not working
+            val whereClause = "${ExpenseDbHelper.COLUMN_CATEGORY} = ? AND (${ExpenseDbHelper.COLUMN_DATE_RANGE} = ? OR ${ExpenseDbHelper.COLUMN_MONTH_YEAR} = ?)"
+            val whereArgs = arrayOf(budget.category.name, budget.dateRange, budget.dateRange)
 
-            val cursor = db.query(
-                ExpenseDbHelper.TABLE_BUDGETS,
-                null,
-                selection,
-                selectionArgs,
-                null,
-                null,
-                null
-            )
+            // First delete any existing budget
+            db.delete(ExpenseDbHelper.TABLE_BUDGETS, whereClause, whereArgs)
 
-            val exists = cursor.count > 0
-            cursor.close()
+            // Then insert the new one
+            val newId = db.insert(ExpenseDbHelper.TABLE_BUDGETS, null, values)
 
-            if (exists) {
-                // Update existing budget
-                db.update(
-                    ExpenseDbHelper.TABLE_BUDGETS,
-                    values,
-                    selection,
-                    selectionArgs
-                )
-            } else {
-                // Insert new budget
-                db.insert(ExpenseDbHelper.TABLE_BUDGETS, null, values)
-            }
+            // Force refresh budgets
+            val allBudgets = getAllBudgetsFromDb()
+            _budgets.update { allBudgets }
 
-            refreshBudgets()
         } catch (e: Exception) {
             Log.e(TAG, "Error inserting budget: ${e.message}", e)
         }
@@ -368,5 +350,38 @@ class SQLiteExpenseRepository(context: Context) {
         return budgets.value.filter { it.dateRange == rangeString }
     }
 
+    // Add this debug method to directly check the database contents
+    suspend fun debugDumpBudgets() = withContext(ioDispatcher) {
+        try {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query(
+                ExpenseDbHelper.TABLE_BUDGETS,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            )
 
+            Log.d(TAG, "BUDGET_DUMP: Found ${cursor.count} budgets in database")
+
+            while (cursor.moveToNext()) {
+                val categoryIndex = cursor.getColumnIndexOrThrow(ExpenseDbHelper.COLUMN_CATEGORY)
+                val amountIndex = cursor.getColumnIndexOrThrow(ExpenseDbHelper.COLUMN_AMOUNT)
+                val dateRangeIndex = cursor.getColumnIndex(ExpenseDbHelper.COLUMN_DATE_RANGE)
+                val monthYearIndex = cursor.getColumnIndex(ExpenseDbHelper.COLUMN_MONTH_YEAR)
+
+                val category = cursor.getString(categoryIndex)
+                val amount = cursor.getDouble(amountIndex)
+                val dateRange = if (dateRangeIndex != -1) cursor.getString(dateRangeIndex) else "NULL"
+                val monthYear = if (monthYearIndex != -1) cursor.getString(monthYearIndex) else "NULL"
+
+                Log.d(TAG, "BUDGET_DUMP: Category: $category, Amount: $amount, DateRange: $dateRange, MonthYear: $monthYear")
+            }
+            cursor.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "BUDGET_DUMP: Error dumping budgets: ${e.message}", e)
+        }
+    }
 }

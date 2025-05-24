@@ -12,6 +12,7 @@ import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.data.model.MonthlySummary
 import com.example.expensetrackerapp.data.db.SQLiteExpenseRepository
 import com.example.expensetrackerapp.ui.components.DateRangeType
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -328,24 +329,61 @@ class ExpenseViewModel(
     fun updateBudget(category: ExpenseCategory, amount: Double) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Updating budget for ${category.name} to $amount for range: ${_currentDateRange.value.toFormattedString()}")
+                Log.d(TAG, "BUDGET_DEBUG: ViewModel updating budget - Category: ${category.name}, Amount: $amount")
 
-                // Create a budget object with the current date range
+                // Get the current date range as a formatted string
+                val dateRangeStr = _currentDateRange.value.toFormattedString()
+                Log.d(TAG, "BUDGET_DEBUG: Using date range: $dateRangeStr")
+
+                // Create a budget object
                 val budget = Budget(
                     category = category,
                     amount = amount,
-                    dateRange = _currentDateRange.value.toFormattedString()
+                    dateRange = dateRangeStr
                 )
 
-                // Save the budget to the repository
+                // First, dump the current budgets to see what's in the database
+                repository.debugDumpBudgets()
+
+                // Save the budget
+                Log.d(TAG, "BUDGET_DEBUG: Calling repository.insertBudget")
                 repository.insertBudget(budget)
 
-                // Explicitly refresh the budgets to ensure the flow is updated
-                repository.refreshBudgets()
+                // Dump budgets again to see if our changes took effect
+                delay(100) // Small delay to let the operation complete
+                repository.debugDumpBudgets()
 
-                Log.d(TAG, "Budget update and refresh completed for ${category.name}")
+                // Force a delay and then check if our budget is reflected in the rangeBudgets
+                delay(300)
+                val currentBudgets = rangeBudgets.value
+                Log.d(TAG, "BUDGET_DEBUG: After save, rangeBudgets has ${currentBudgets.size} items")
+
+                // Check if our saved budget is in rangeBudgets
+                val savedBudget = currentBudgets.find { it.category == category && it.dateRange == dateRangeStr }
+                if (savedBudget != null) {
+                    Log.d(TAG, "BUDGET_DEBUG: Found our budget in rangeBudgets with amount: ${savedBudget.amount}")
+                } else {
+                    Log.d(TAG, "BUDGET_DEBUG: Could NOT find our budget in rangeBudgets - THIS IS THE PROBLEM")
+
+                    // This is a more aggressive approach to force a UI update:
+                    // Force a small change to currentDateRange to trigger recomposition of rangeBudgets
+                    Log.d(TAG, "BUDGET_DEBUG: Force-triggering recomposition by updating currentDateRange")
+                    val tempRange = _currentDateRange.value
+                    _currentDateRange.value = _currentDateRange.value // Just reassign the same value
+
+                    // Double-check that the budget is now available
+                    delay(300)
+                    val updatedBudgets = rangeBudgets.value
+                    val updatedBudget = updatedBudgets.find { it.category == category && it.dateRange == dateRangeStr }
+                    if (updatedBudget != null) {
+                        Log.d(TAG, "BUDGET_DEBUG: After force recomposition, found budget with amount: ${updatedBudget.amount}")
+                    } else {
+                        Log.d(TAG, "BUDGET_DEBUG: Still can't find budget after force recomposition!")
+                    }
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating budget: ${e.message}", e)
+                Log.e(TAG, "BUDGET_DEBUG: Error in updateBudget: ${e.message}", e)
+                e.printStackTrace()
             }
         }
     }
@@ -360,6 +398,81 @@ class ExpenseViewModel(
                 return ExpenseViewModel(repository) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        }
+    }
+
+    /**
+     * Emergency direct fix for budget updates
+     * This bypasses the normal flow to ensure budget values are updated
+     */
+    fun directUpdateBudget(category: ExpenseCategory, amount: Double) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "BUDGET_DEBUG: DIRECT update for ${category.name} = $amount")
+
+                // 1. Create the budget with current date range
+                val dateRange = _currentDateRange.value.toFormattedString()
+                val budget = Budget(category, amount, dateRange)
+
+                // 2. Save to database
+                repository.insertBudget(budget)
+
+                // 3. Force a refresh
+                repository.refreshBudgets()
+
+                // 4. Force UI update by temporarily changing date range
+                val currentRange = _currentDateRange.value
+
+                // Small change to force recomposition
+                _currentDateRange.value = DateRange(
+                    currentRange.startDate.plusDays(0),  // No actual change
+                    currentRange.endDate.plusDays(0)     // No actual change
+                )
+
+                // Set back to original after a small delay
+                delay(100)
+                _currentDateRange.value = currentRange
+
+                Log.d(TAG, "BUDGET_DEBUG: DIRECT update completed")
+
+                // 5. Verify the budget was saved
+                repository.debugDumpBudgets()
+            } catch (e: Exception) {
+                Log.e(TAG, "BUDGET_DEBUG: DIRECT update failed: ${e.message}")
+            }
+        }
+    }
+
+    fun fixedUpdateBudget(category: ExpenseCategory, amount: Double) {
+        viewModelScope.launch {
+            try {
+                // Create a budget object with the current date range
+                val budget = Budget(
+                    category = category,
+                    amount = amount,
+                    dateRange = _currentDateRange.value.toFormattedString()
+                )
+
+                // Save the budget
+                repository.insertBudget(budget)
+
+                // Force a small date range change to refresh UI
+                // Save current range
+                val currentRange = _currentDateRange.value
+
+                // Set it to a tiny bit different value (doesn't actually change dates)
+                _currentDateRange.value = DateRange(
+                    currentRange.startDate.plusDays(0),  // No actual change
+                    currentRange.endDate.plusDays(0)     // No actual change
+                )
+
+                // Set it back after a small delay
+                delay(100)
+                _currentDateRange.value = currentRange
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating budget: ${e.message}", e)
+            }
         }
     }
 

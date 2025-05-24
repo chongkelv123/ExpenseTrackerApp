@@ -1,6 +1,5 @@
 package com.example.expensetrackerapp.ui.screens.settings
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,7 +17,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.CustomDateRangeDialog
 import com.example.expensetrackerapp.ui.components.DateRangeSelector
-import com.example.expensetrackerapp.ui.components.DateRangeType
 import com.example.expensetrackerapp.ui.theme.*
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 import kotlinx.coroutines.delay
@@ -126,18 +124,13 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
 
                 // Budget settings for each category
                 ExpenseCategory.values().forEach { category ->
-                    val budgetState = budgetAmounts[category]
-                        ?: remember { mutableStateOf("") }
-
                     BudgetSettingItem(
                         category = category,
-                        budgetAmount = budgetState.value,
-                        onBudgetAmountChange = { budgetState.value = it },
-                        onSave = {
-                            val amount = budgetState.value.toDoubleOrNull() ?: 0.0
-                            handleBudgetUpdate(category, amount)
-                        },
-                        showSuccess = saveSuccess[category] == true
+                        viewModel = viewModel,
+                        onSave = TODO(),
+                        budgetAmount = TODO(),
+                        onBudgetAmountChange = TODO(),
+                        showSuccess = TODO()
                     )
 
                     if (category != ExpenseCategory.values().last()) {
@@ -211,10 +204,11 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
 @Composable
 fun BudgetSettingItem(
     category: ExpenseCategory,
-    budgetAmount: String,
-    onBudgetAmountChange: (String) -> Unit,
+    viewModel: ExpenseViewModel,
     onSave: () -> Unit,
-    showSuccess: Boolean = false
+    budgetAmount: String,
+    onBudgetAmountChange: () -> Unit,
+    showSuccess: Boolean
 ) {
     val categoryColor = when (category) {
         ExpenseCategory.NTUC -> categoryNtuc
@@ -224,103 +218,106 @@ fun BudgetSettingItem(
         ExpenseCategory.OTHERS -> categoryOthers
     }
 
-    Column(
+    // Find the current budget from the viewModel
+    val rangeBudgets by viewModel.rangeBudgets.collectAsState()
+    val currentDateRange by viewModel.currentDateRange.collectAsState()
+
+    // Find current budget amount
+    val currentBudget = rangeBudgets.find { it.category == category }
+
+    // State for editing
+    var budgetAmount by remember(currentBudget) {
+        mutableStateOf(
+            if (currentBudget?.amount ?: 0.0 > 0)
+                (currentBudget?.amount ?: 0.0).toString()
+            else ""
+        )
+    }
+
+    // Success state
+    var showSuccess by remember { mutableStateOf(false) }
+
+    // Launch effect to reset success after delay
+    LaunchedEffect(showSuccess) {
+        if (showSuccess) {
+            delay(2000)
+            showSuccess = false
+        }
+    }
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Text(
+            text = category.displayName,
+            style = MaterialTheme.typography.bodyLarge,
+            color = categoryColor,
+            modifier = Modifier.weight(1f),
+            fontWeight = FontWeight.Medium
+        )
+
         Row(
-            modifier = Modifier
-                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = category.displayName,
-                style = MaterialTheme.typography.bodyLarge,
-                color = categoryColor,
-                modifier = Modifier.weight(1f),
-                fontWeight = FontWeight.Medium
+                text = "S$",
+                style = MaterialTheme.typography.bodyLarge
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "S$",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-
-                OutlinedTextField(
-                    value = budgetAmount,
-                    onValueChange = {
-                        // Only allow numbers and decimal point
-                        if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*$"))) {
-                            onBudgetAmountChange(it)
-                        }
-                    },
-                    modifier = Modifier.width(120.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    trailingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Budget"
-                        )
+            OutlinedTextField(
+                value = budgetAmount,
+                onValueChange = {
+                    // Only allow numbers and decimal point
+                    if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*$"))) {
+                        budgetAmount = it
                     }
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Button(
-                    onClick = onSave,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = categoryColor
+                },
+                modifier = Modifier.width(120.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Budget"
                     )
-                ) {
-                    if (!showSuccess) {
-                        Icon(
-                            imageVector = Icons.Default.Save,
-                            contentDescription = "Save Budget"
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Save")
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Saved"
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Saved!")
-                    }
                 }
-            }
-        }
+            )
 
-        // Show success message
-        AnimatedVisibility(
-            visible = showSuccess,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Button(
+                onClick = {
+                    // Convert to double, default to 0.0 if empty
+                    val amount = budgetAmount.toDoubleOrNull() ?: 0.0
+
+                    // Use our fixed update method
+                    viewModel.fixedUpdateBudget(category, amount)
+
+                    // Show success
+                    showSuccess = true
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = categoryColor
+                )
             ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Budget updated",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                if (!showSuccess) {
+                    Icon(
+                        imageVector = Icons.Default.Save,
+                        contentDescription = "Save Budget"
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Save")
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Saved"
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Saved!")
+                }
             }
         }
     }
