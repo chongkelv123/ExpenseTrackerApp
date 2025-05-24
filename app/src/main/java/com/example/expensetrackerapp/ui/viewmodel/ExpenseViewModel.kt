@@ -56,7 +56,7 @@ class ExpenseViewModel(
                     val expenseDate = expense.date
                     (expenseDate.isEqual(range.startDate) || expenseDate.isAfter(range.startDate)) &&
                             (expenseDate.isEqual(range.endDate) || expenseDate.isBefore(range.endDate))
-                }.sortedByDescending { it.date } // Sort by date, most recent first
+                }.sortedByDescending { it.date }
             } catch (e: Exception) {
                 Log.e(TAG, "Error filtering expenses by range: ${e.message}", e)
                 emptyList()
@@ -76,16 +76,12 @@ class ExpenseViewModel(
     val rangeBudgets: StateFlow<List<Budget>> =
         combine(currentDateRange, repository.budgets) { range, budgets ->
             try {
-                // If any category doesn't have a budget, create a default one
                 val rangeString = range.toFormattedString()
-                val existingCategories = budgets
-                    .filter { it.dateRange == rangeString }
-                    .map { it.category }
+                val existingBudgets = budgets.filter { it.dateRange == rangeString }
+                val existingCategories = existingBudgets.map { it.category }.toSet()
 
-                val allBudgets = budgets
-                    .filter { it.dateRange == rangeString }
-                    .toMutableList()
-
+                // Create default budgets for missing categories
+                val allBudgets = existingBudgets.toMutableList()
                 ExpenseCategory.values().forEach { category ->
                     if (category !in existingCategories) {
                         allBudgets.add(
@@ -98,7 +94,7 @@ class ExpenseViewModel(
                     }
                 }
 
-                allBudgets
+                allBudgets.sortedBy { it.category.ordinal }
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting budgets for range: ${e.message}", e)
                 // Return default empty budgets for each category
@@ -154,7 +150,6 @@ class ExpenseViewModel(
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error calculating range summary: ${e.message}", e)
-                // Return empty summary
                 MonthlySummary(
                     dateRange = range,
                     totalSpent = 0.0,
@@ -187,89 +182,100 @@ class ExpenseViewModel(
 
     // Set date range type and update current range accordingly
     fun setDateRangeType(type: DateRangeType) {
-        try {
-            _currentRangeType.value = type
+        viewModelScope.launch {
+            try {
+                _currentRangeType.value = type
 
-            // Update the current date range based on the selected type
-            val newRange = when (type) {
-                DateRangeType.BUDGET_CYCLE -> DateRange.customDefault()
-                DateRangeType.CALENDAR_MONTH -> DateRange.currentCalendarMonth()
-                DateRangeType.CUSTOM -> _currentDateRange.value // Keep current if custom
+                // Update the current date range based on the selected type
+                val newRange = when (type) {
+                    DateRangeType.BUDGET_CYCLE -> DateRange.customDefault()
+                    DateRangeType.CALENDAR_MONTH -> DateRange.currentCalendarMonth()
+                    DateRangeType.CUSTOM -> _currentDateRange.value // Keep current if custom
+                }
+
+                setCurrentDateRange(newRange)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting date range type: ${e.message}", e)
             }
-
-            setCurrentDateRange(newRange)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting date range type: ${e.message}", e)
         }
     }
 
     // Functions for changing the current date range
     fun setCurrentDateRange(dateRange: DateRange) {
-        try {
-            _currentDateRange.value = dateRange
+        viewModelScope.launch {
+            try {
+                _currentDateRange.value = dateRange
 
-            // When changing date range, ensure budgets exist for all categories
-            ensureBudgetsExistForRange(dateRange)
+                // Update the range type based on the range characteristics
+                _currentRangeType.value = when {
+                    dateRange.isBudgetCycle() -> DateRangeType.BUDGET_CYCLE
+                    dateRange.isCalendarMonth() -> DateRangeType.CALENDAR_MONTH
+                    else -> DateRangeType.CUSTOM
+                }
 
-            // Update the range type based on the range characteristics
-            _currentRangeType.value = when {
-                dateRange.isBudgetCycle() -> DateRangeType.BUDGET_CYCLE
-                dateRange.isCalendarMonth() -> DateRangeType.CALENDAR_MONTH
-                else -> DateRangeType.CUSTOM
+                // Ensure budgets exist for this range
+                ensureBudgetsExistForRange(dateRange)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting current date range: ${e.message}", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting current date range: ${e.message}", e)
         }
     }
 
-    private fun ensureBudgetsExistForRange(dateRange: DateRange) {
-        viewModelScope.launch {
-            try {
-                val rangeString = dateRange.toFormattedString()
-                val existingBudgets = rangeBudgets.value
-                val existingCategories = existingBudgets.map { it.category }
+    private suspend fun ensureBudgetsExistForRange(dateRange: DateRange) {
+        try {
+            val rangeString = dateRange.toFormattedString()
+            val currentBudgets = repository.getBudgetsForRange(dateRange)
+            val existingCategories = currentBudgets.map { it.category }.toSet()
 
-                // Create default budgets for any missing categories
-                ExpenseCategory.values().forEach { category ->
-                    if (category !in existingCategories) {
-                        updateBudget(category, 0.0)
-                    }
+            // Create default budgets for any missing categories
+            ExpenseCategory.values().forEach { category ->
+                if (category !in existingCategories) {
+                    val budget = Budget(
+                        category = category,
+                        amount = 0.0,
+                        dateRange = rangeString
+                    )
+                    repository.insertBudget(budget)
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error ensuring budgets exist: ${e.message}", e)
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error ensuring budgets exist: ${e.message}", e)
         }
     }
 
     fun nextRange() {
-        try {
-            val nextRange = when (_currentRangeType.value) {
-                DateRangeType.BUDGET_CYCLE -> _currentDateRange.value.nextBudgetCycle()
-                DateRangeType.CALENDAR_MONTH -> {
-                    val currentYearMonth = YearMonth.from(_currentDateRange.value.startDate)
-                    DateRange.forCalendarMonth(currentYearMonth.plusMonths(1))
+        viewModelScope.launch {
+            try {
+                val nextRange = when (_currentRangeType.value) {
+                    DateRangeType.BUDGET_CYCLE -> _currentDateRange.value.nextBudgetCycle()
+                    DateRangeType.CALENDAR_MONTH -> {
+                        val currentYearMonth = YearMonth.from(_currentDateRange.value.startDate)
+                        DateRange.forCalendarMonth(currentYearMonth.plusMonths(1))
+                    }
+                    DateRangeType.CUSTOM -> _currentDateRange.value.next()
                 }
-                DateRangeType.CUSTOM -> _currentDateRange.value.next()
+                setCurrentDateRange(nextRange)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting next range: ${e.message}", e)
             }
-            setCurrentDateRange(nextRange)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting next range: ${e.message}", e)
         }
     }
 
     fun previousRange() {
-        try {
-            val prevRange = when (_currentRangeType.value) {
-                DateRangeType.BUDGET_CYCLE -> _currentDateRange.value.previousBudgetCycle()
-                DateRangeType.CALENDAR_MONTH -> {
-                    val currentYearMonth = YearMonth.from(_currentDateRange.value.startDate)
-                    DateRange.forCalendarMonth(currentYearMonth.minusMonths(1))
+        viewModelScope.launch {
+            try {
+                val prevRange = when (_currentRangeType.value) {
+                    DateRangeType.BUDGET_CYCLE -> _currentDateRange.value.previousBudgetCycle()
+                    DateRangeType.CALENDAR_MONTH -> {
+                        val currentYearMonth = YearMonth.from(_currentDateRange.value.startDate)
+                        DateRange.forCalendarMonth(currentYearMonth.minusMonths(1))
+                    }
+                    DateRangeType.CUSTOM -> _currentDateRange.value.previous()
                 }
-                DateRangeType.CUSTOM -> _currentDateRange.value.previous()
+                setCurrentDateRange(prevRange)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting previous range: ${e.message}", e)
             }
-            setCurrentDateRange(prevRange)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting previous range: ${e.message}", e)
         }
     }
 
@@ -325,65 +331,28 @@ class ExpenseViewModel(
         }
     }
 
-    // Budget operations
+    // Simplified budget update operation
     fun updateBudget(category: ExpenseCategory, amount: Double) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "BUDGET_DEBUG: ViewModel updating budget - Category: ${category.name}, Amount: $amount")
-
-                // Get the current date range as a formatted string
-                val dateRangeStr = _currentDateRange.value.toFormattedString()
-                Log.d(TAG, "BUDGET_DEBUG: Using date range: $dateRangeStr")
-
-                // Create a budget object
                 val budget = Budget(
                     category = category,
                     amount = amount,
-                    dateRange = dateRangeStr
+                    dateRange = _currentDateRange.value.toFormattedString()
                 )
 
-                // First, dump the current budgets to see what's in the database
-                repository.debugDumpBudgets()
-
                 // Save the budget
-                Log.d(TAG, "BUDGET_DEBUG: Calling repository.insertBudget")
                 repository.insertBudget(budget)
 
-                // Dump budgets again to see if our changes took effect
-                delay(100) // Small delay to let the operation complete
-                repository.debugDumpBudgets()
+                // Force refresh to ensure UI updates
+                repository.refreshBudgets()
 
-                // Force a delay and then check if our budget is reflected in the rangeBudgets
-                delay(300)
-                val currentBudgets = rangeBudgets.value
-                Log.d(TAG, "BUDGET_DEBUG: After save, rangeBudgets has ${currentBudgets.size} items")
+                // Small trick to force UI recomposition if needed
+                val currentRange = _currentDateRange.value
+                _currentDateRange.value = currentRange
 
-                // Check if our saved budget is in rangeBudgets
-                val savedBudget = currentBudgets.find { it.category == category && it.dateRange == dateRangeStr }
-                if (savedBudget != null) {
-                    Log.d(TAG, "BUDGET_DEBUG: Found our budget in rangeBudgets with amount: ${savedBudget.amount}")
-                } else {
-                    Log.d(TAG, "BUDGET_DEBUG: Could NOT find our budget in rangeBudgets - THIS IS THE PROBLEM")
-
-                    // This is a more aggressive approach to force a UI update:
-                    // Force a small change to currentDateRange to trigger recomposition of rangeBudgets
-                    Log.d(TAG, "BUDGET_DEBUG: Force-triggering recomposition by updating currentDateRange")
-                    val tempRange = _currentDateRange.value
-                    _currentDateRange.value = _currentDateRange.value // Just reassign the same value
-
-                    // Double-check that the budget is now available
-                    delay(300)
-                    val updatedBudgets = rangeBudgets.value
-                    val updatedBudget = updatedBudgets.find { it.category == category && it.dateRange == dateRangeStr }
-                    if (updatedBudget != null) {
-                        Log.d(TAG, "BUDGET_DEBUG: After force recomposition, found budget with amount: ${updatedBudget.amount}")
-                    } else {
-                        Log.d(TAG, "BUDGET_DEBUG: Still can't find budget after force recomposition!")
-                    }
-                }
             } catch (e: Exception) {
-                Log.e(TAG, "BUDGET_DEBUG: Error in updateBudget: ${e.message}", e)
-                e.printStackTrace()
+                Log.e(TAG, "Error updating budget: ${e.message}", e)
             }
         }
     }
@@ -400,80 +369,4 @@ class ExpenseViewModel(
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }
-
-    /**
-     * Emergency direct fix for budget updates
-     * This bypasses the normal flow to ensure budget values are updated
-     */
-    fun directUpdateBudget(category: ExpenseCategory, amount: Double) {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "BUDGET_DEBUG: DIRECT update for ${category.name} = $amount")
-
-                // 1. Create the budget with current date range
-                val dateRange = _currentDateRange.value.toFormattedString()
-                val budget = Budget(category, amount, dateRange)
-
-                // 2. Save to database
-                repository.insertBudget(budget)
-
-                // 3. Force a refresh
-                repository.refreshBudgets()
-
-                // 4. Force UI update by temporarily changing date range
-                val currentRange = _currentDateRange.value
-
-                // Small change to force recomposition
-                _currentDateRange.value = DateRange(
-                    currentRange.startDate.plusDays(0),  // No actual change
-                    currentRange.endDate.plusDays(0)     // No actual change
-                )
-
-                // Set back to original after a small delay
-                delay(100)
-                _currentDateRange.value = currentRange
-
-                Log.d(TAG, "BUDGET_DEBUG: DIRECT update completed")
-
-                // 5. Verify the budget was saved
-                repository.debugDumpBudgets()
-            } catch (e: Exception) {
-                Log.e(TAG, "BUDGET_DEBUG: DIRECT update failed: ${e.message}")
-            }
-        }
-    }
-
-    fun fixedUpdateBudget(category: ExpenseCategory, amount: Double) {
-        viewModelScope.launch {
-            try {
-                // Create a budget object with the current date range
-                val budget = Budget(
-                    category = category,
-                    amount = amount,
-                    dateRange = _currentDateRange.value.toFormattedString()
-                )
-
-                // Save the budget
-                repository.insertBudget(budget)
-
-                // Force a small date range change to refresh UI
-                // Save current range
-                val currentRange = _currentDateRange.value
-
-                // Set it to a tiny bit different value (doesn't actually change dates)
-                _currentDateRange.value = DateRange(
-                    currentRange.startDate.plusDays(0),  // No actual change
-                    currentRange.endDate.plusDays(0)     // No actual change
-                )
-
-                // Set it back after a small delay
-                delay(100)
-                _currentDateRange.value = currentRange
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error updating budget: ${e.message}", e)
-            }
-        }
-    }
-
 }

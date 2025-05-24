@@ -13,11 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewModelScope
 import com.example.expensetrackerapp.data.model.ExpenseCategory
 import com.example.expensetrackerapp.ui.components.CustomDateRangeDialog
 import com.example.expensetrackerapp.ui.components.DateRangeSelector
-import com.example.expensetrackerapp.ui.theme.*
+import com.example.expensetrackerapp.ui.components.getCategoryColor
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -28,34 +27,8 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
     val currentDateRange by viewModel.currentDateRange.collectAsState()
     val currentRangeType by viewModel.currentRangeType.collectAsState()
 
-    // State for budget amounts
-    val budgetAmounts = remember(rangeBudgets) {
-        rangeBudgets.associate { budget ->
-            budget.category to mutableStateOf(
-                if (budget.amount > 0) budget.amount.toString() else ""
-            )
-        }
-    }
-
     // State for custom date range dialog
     var showCustomRangeDialog by remember { mutableStateOf(false) }
-
-    // State for success messages
-    val saveSuccess = remember { mutableStateMapOf<ExpenseCategory, Boolean>() }
-
-    // Handler for budget updates
-    val handleBudgetUpdate = { category: ExpenseCategory, amount: Double ->
-        viewModel.updateBudget(category, amount)
-
-        // Show success message briefly for this category
-        saveSuccess[category] = true
-
-        // Set up a coroutine to hide the success message after delay
-        viewModel.viewModelScope.launch {
-            delay(2000)
-            saveSuccess[category] = false
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -127,10 +100,7 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
                     BudgetSettingItem(
                         category = category,
                         viewModel = viewModel,
-                        onSave = TODO(),
-                        budgetAmount = TODO(),
-                        onBudgetAmountChange = TODO(),
-                        showSuccess = TODO()
+                        currentBudget = rangeBudgets.find { it.category == category }
                     )
 
                     if (category != ExpenseCategory.values().last()) {
@@ -168,7 +138,7 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Theme options would go here
+                // Theme options
                 Text(
                     text = "Dynamic theme based on system settings",
                     style = MaterialTheme.typography.bodyMedium,
@@ -205,25 +175,10 @@ fun SettingsScreen(viewModel: ExpenseViewModel) {
 fun BudgetSettingItem(
     category: ExpenseCategory,
     viewModel: ExpenseViewModel,
-    onSave: () -> Unit,
-    budgetAmount: String,
-    onBudgetAmountChange: () -> Unit,
-    showSuccess: Boolean
+    currentBudget: com.example.expensetrackerapp.data.model.Budget?
 ) {
-    val categoryColor = when (category) {
-        ExpenseCategory.NTUC -> categoryNtuc
-        ExpenseCategory.MEAL -> categoryMeal
-        ExpenseCategory.FUEL -> categoryFuel
-        ExpenseCategory.JL_JE -> categoryJlJe
-        ExpenseCategory.OTHERS -> categoryOthers
-    }
-
-    // Find the current budget from the viewModel
-    val rangeBudgets by viewModel.rangeBudgets.collectAsState()
-    val currentDateRange by viewModel.currentDateRange.collectAsState()
-
-    // Find current budget amount
-    val currentBudget = rangeBudgets.find { it.category == category }
+    val categoryColor = getCategoryColor(category)
+    val scope = rememberCoroutineScope()
 
     // State for editing
     var budgetAmount by remember(currentBudget) {
@@ -236,14 +191,6 @@ fun BudgetSettingItem(
 
     // Success state
     var showSuccess by remember { mutableStateOf(false) }
-
-    // Launch effect to reset success after delay
-    LaunchedEffect(showSuccess) {
-        if (showSuccess) {
-            delay(2000)
-            showSuccess = false
-        }
-    }
 
     Row(
         modifier = Modifier
@@ -293,11 +240,17 @@ fun BudgetSettingItem(
                     // Convert to double, default to 0.0 if empty
                     val amount = budgetAmount.toDoubleOrNull() ?: 0.0
 
-                    // Use our fixed update method
-                    viewModel.fixedUpdateBudget(category, amount)
+                    // Update budget
+                    viewModel.updateBudget(category, amount)
 
-                    // Show success
+                    // Show success state
                     showSuccess = true
+
+                    // Reset success state after delay
+                    scope.launch {
+                        delay(2000)
+                        showSuccess = false
+                    }
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = categoryColor

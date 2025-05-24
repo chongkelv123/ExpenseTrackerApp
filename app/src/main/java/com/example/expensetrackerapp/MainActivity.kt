@@ -1,10 +1,12 @@
 package com.example.expensetrackerapp
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -14,6 +16,7 @@ import com.example.expensetrackerapp.navigation.ExpenseTrackerNavigation
 import com.example.expensetrackerapp.ui.theme.ExpenseTrackerAppTheme
 import com.example.expensetrackerapp.ui.viewmodel.ExpenseViewModel
 
+@RequiresApi(Build.VERSION_CODES.O)
 class MainActivity : ComponentActivity() {
     // Initialize the ViewModel using the standard Android ViewModel pattern
     private lateinit var expenseViewModel: ExpenseViewModel

@@ -16,6 +16,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -120,7 +121,15 @@ fun ExpenseTrackerNavigation(viewModel: ExpenseViewModel) {
             }
 
             composable(DetailScreen.ExpenseEntry.route) { backStackEntry ->
-                val categoryName = backStackEntry.arguments?.getString("categoryId") ?: return@composable
+                val categoryName = backStackEntry.arguments?.getString("categoryId")
+                if (categoryName == null) {
+                    // Navigate back or show error
+                    LaunchedEffect(Unit) {
+                        navController.popBackStack()
+                    }
+                    return@composable
+                }
+
                 val category = try {
                     ExpenseCategory.valueOf(categoryName)
                 } catch (e: IllegalArgumentException) {

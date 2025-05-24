@@ -22,6 +22,7 @@ import org.threeten.bp.LocalDate
 import org.threeten.bp.format.DateTimeFormatter
 import org.threeten.bp.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
+import com.example.expensetrackerapp.ui.components.QuickAmountButton
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -256,18 +257,18 @@ fun TransactionEditScreen(
 
     // Date picker dialog
     if (showDatePicker) {
+        // Better date picker state initialization
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = TimeUnit.DAYS.toMillis(selectedDate.toEpochDay())
+            initialSelectedDateMillis = selectedDate.toEpochDay() * 24 * 60 * 60 * 1000L
         )
 
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
+                    // Better date conversion from picker
                     datePickerState.selectedDateMillis?.let { millis ->
-                        // Convert milliseconds to epoch days and then to LocalDate
-                        val epochDay = TimeUnit.MILLISECONDS.toDays(millis)
-                        selectedDate = LocalDate.ofEpochDay(epochDay)
+                        selectedDate = LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000L))
                     }
                     showDatePicker = false
                 }) {
@@ -311,18 +312,5 @@ fun TransactionNotFoundScreen(onNavigateBack: () -> Unit) {
         Button(onClick = onNavigateBack) {
             Text("Go Back")
         }
-    }
-}
-
-@Composable
-fun QuickAmountButton(
-    amount: String,
-    onAmountSelected: (String) -> Unit
-) {
-    OutlinedButton(
-        onClick = { onAmountSelected(amount) },
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text("S$$amount")
     }
 }
